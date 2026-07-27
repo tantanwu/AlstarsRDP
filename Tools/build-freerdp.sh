@@ -103,6 +103,7 @@ build_architecture() {
     -DOPENSSL_ROOT_DIR="${openssl_root}" \
     -DOPENSSL_USE_STATIC_LIBS=TRUE \
     -DWITH_OPENSSL=ON \
+    -DWITH_JSON_DISABLED=ON \
     -DWITH_SERVER=OFF \
     -DWITH_PROXY=OFF \
     -DWITH_CLIENT=OFF \
