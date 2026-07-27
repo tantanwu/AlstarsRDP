@@ -146,7 +146,7 @@ final class DiagnosticsWindowController: NSWindowController, NSTableViewDataSour
                     do { try data.write(to: url, options: .atomic) }
                     catch { NSAlert(error: error).beginSheetModal(for: window) }
                 }
-            } catch { if let window { NSAlert(error: error).beginSheetModal(for: window) } }
+            } catch { if let window { _ = await NSAlert(error: error).beginSheetModal(for: window) } }
         }
     }
 

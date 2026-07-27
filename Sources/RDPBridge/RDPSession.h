@@ -61,7 +61,7 @@ typedef NS_OPTIONS(NSUInteger, RDPMouseButton) {
 @end
 
 @class RDPSession;
-@protocol RDPSessionDelegate <NSObject>
+NS_SWIFT_UI_ACTOR @protocol RDPSessionDelegate <NSObject>
 - (void)session:(RDPSession *)session didChangeState:(RDPNativeSessionState)state errorCode:(uint32_t)errorCode
     NS_SWIFT_NAME(session(_:didChange:errorCode:));
 - (void)session:(RDPSession *)session didReceiveFrame:(NSData *)frame width:(uint32_t)width height:(uint32_t)height stride:(uint32_t)stride
@@ -80,7 +80,8 @@ typedef NS_OPTIONS(NSUInteger, RDPMouseButton) {
 - (void)disconnect;
 - (void)sendScanCode:(uint32_t)scanCode keyDown:(BOOL)keyDown;
 - (void)sendUnicodeScalar:(uint16_t)scalar keyDown:(BOOL)keyDown;
-- (void)sendMouseAtX:(uint16_t)x y:(uint16_t)y buttons:(RDPMouseButton)buttons keyDown:(BOOL)keyDown move:(BOOL)move;
+- (void)sendMouseAtX:(uint16_t)x y:(uint16_t)y buttons:(RDPMouseButton)buttons keyDown:(BOOL)keyDown move:(BOOL)move
+    NS_SWIFT_NAME(sendMouse(atX:y:buttons:keyDown:move:));
 - (void)sendVerticalScroll:(int16_t)delta atX:(uint16_t)x y:(uint16_t)y;
 - (void)sendHorizontalScroll:(int16_t)delta atX:(uint16_t)x y:(uint16_t)y;
 - (void)sendControlAltDelete;

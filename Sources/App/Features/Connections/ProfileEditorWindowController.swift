@@ -369,7 +369,7 @@ final class ProfileEditorWindowController: NSWindowController {
                 } catch {
                     self.setSaving(false)
                     guard let window = self.window else { return }
-                    NSAlert(error: error).beginSheetModal(for: window)
+                    _ = await NSAlert(error: error).beginSheetModal(for: window)
                 }
             }
         } catch {
@@ -636,12 +636,12 @@ final class ProfileEditorWindowController: NSWindowController {
                     let alert = NSAlert()
                     alert.messageText = NSLocalizedString("Connection path succeeded", comment: "route success")
                     alert.informativeText = String(format: NSLocalizedString("Stage: %@\nElapsed: %d ms\nCertificate identity: %@", comment: "route result"), report.stage.rawValue, report.durationMilliseconds, report.certificateName)
-                    if let window = self.window { alert.beginSheetModal(for: window) }
+                    if let window = self.window { _ = await alert.beginSheetModal(for: window) }
                 } catch is CancellationError {
                     return
                 } catch {
                     guard self.routeTestGeneration == generation else { return }
-                    if let window = self.window { NSAlert(error: error).beginSheetModal(for: window) }
+                    if let window = self.window { _ = await NSAlert(error: error).beginSheetModal(for: window) }
                 }
             }
         } catch {

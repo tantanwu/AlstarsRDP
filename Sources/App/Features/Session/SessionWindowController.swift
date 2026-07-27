@@ -600,7 +600,7 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
     }
 
     private func resolveProxyCredential() async throws -> CredentialMaterial? {
-        let proxy: ProxyConfiguration
+        let proxy: RDPDomain.ProxyConfiguration
         switch profile.route {
         case let .socks5(configuration), let .httpConnect(configuration, _):
             proxy = configuration

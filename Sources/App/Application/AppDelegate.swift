@@ -3,6 +3,7 @@ import Diagnostics
 import Persistence
 
 @main
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var libraryWindowController: ConnectionLibraryWindowController?
     private var pendingOpenFiles: [String] = []

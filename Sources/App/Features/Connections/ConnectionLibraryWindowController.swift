@@ -59,7 +59,7 @@ final class ConnectionLibraryWindowController: NSWindowController, NSTableViewDa
         let editButton = iconButton(symbol: "pencil", tooltip: NSLocalizedString("Edit Connection", comment: "edit"), action: #selector(editConnection))
         let duplicateButton = iconButton(symbol: "plus.square.on.square", tooltip: NSLocalizedString("Duplicate Connection", comment: "duplicate"), action: #selector(duplicateConnection))
         let deleteButton = iconButton(symbol: "trash", tooltip: NSLocalizedString("Delete Connection", comment: "delete"), action: #selector(deleteConnection))
-        let importButton = iconButton(symbol: "square.and.arrow.down", tooltip: NSLocalizedString("Import RDP File", comment: "import rdp"), action: #selector(importRDPFile))
+        let importButton = iconButton(symbol: "square.and.arrow.down", tooltip: NSLocalizedString("Import RDP File", comment: "import rdp"), action: #selector(chooseRDPFile))
         let exportButton = iconButton(symbol: "square.and.arrow.up", tooltip: NSLocalizedString("Export RDP File", comment: "export rdp"), action: #selector(exportRDPFile))
         let diagnosticsButton = iconButton(symbol: "waveform.path.ecg", tooltip: NSLocalizedString("Diagnostics", comment: "diagnostics"), action: #selector(showDiagnostics))
         let backupButton = iconButton(symbol: "archivebox", tooltip: NSLocalizedString("Back Up Connections", comment: "backup profiles"), action: #selector(backupProfiles))
@@ -317,7 +317,7 @@ final class ConnectionLibraryWindowController: NSWindowController, NSTableViewDa
         controller.connect()
     }
 
-    @objc private func importRDPFile() {
+    @objc private func chooseRDPFile() {
         guard let window else { return }
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [rdpDocumentType]
