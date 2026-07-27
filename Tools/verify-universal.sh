@@ -16,7 +16,8 @@ minimum_version() {
   local binary="$1"
   local arch="$2"
   xcrun vtool -arch "${arch}" -show-build "${binary}" | awk '
-    $1 == "minos" { print $2; found = 1; exit }
+    $1 == "platform" { platform = $2; next }
+    $1 == "minos" && platform == "MACOS" { print $2; found = 1; exit }
     $1 == "version" && fallback == "" { fallback = $2 }
     END { if (!found && fallback != "") print fallback }
   ' | head -n 1

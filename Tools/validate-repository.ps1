@@ -160,6 +160,9 @@ foreach ($requiredCheck in @('otool -L', '/opt/homebrew/', '/usr/local/', 'Vendo
         Add-Failure "verify-universal.sh is missing runtime closure check: $requiredCheck"
     }
 }
+if ($universalVerifier -notmatch '\$1\s*==\s*"minos"\s*&&\s*platform\s*==\s*"MACOS"') {
+    Add-Failure 'verify-universal.sh must ignore non-macOS build-version records in zippered Mach-O files.'
+}
 
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { Write-Error $_ }
