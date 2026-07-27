@@ -112,6 +112,7 @@ build_architecture() {
     -DWITH_FFMPEG=OFF \
     -DWITH_OPENH264=OFF \
     -DWITH_SWSCALE=OFF \
+    -DWITH_LIBUSB=OFF \
     -DWITH_CUPS=ON \
     -DWITH_PCSC=ON \
     -DWITH_MANPAGES=OFF \

@@ -86,9 +86,9 @@ public enum RDPFileCodec {
     }
 
     public static func encode(_ profile: ConnectionProfile) throws -> Data {
-        let profile = try profile.validated()
         try validateTextField(profile.usernameHint, field: "username")
         try validateTextField(profile.domainHint, field: "domain")
+        let profile = try profile.validated()
         let host = profile.target.endpoint.host.contains(":") ? "[\(profile.target.endpoint.host)]" : profile.target.endpoint.host
         let address = profile.target.endpoint.port == 3389 ? host : "\(host):\(profile.target.endpoint.port)"
         let values = [

@@ -270,13 +270,13 @@ public actor ProfileDatabase {
     }
 
     public func profile(id: UUID) throws -> ConnectionProfile? {
-        let statement = try prepare("SELECT payload FROM profiles WHERE id = ? LIMIT 1;")
+        let statement = try prepare("SELECT payload, updated_at FROM profiles WHERE id = ? LIMIT 1;")
         defer { sqlite3_finalize(statement) }
         try bind(id.uuidString, to: 1, in: statement)
         let result = sqlite3_step(statement)
         if result == SQLITE_DONE { return nil }
         guard result == SQLITE_ROW else { throw ProfileDatabaseError.execute(lastError) }
-        return try decodeProfile(statement, id: id)
+        return try decodeProfile(statement, id: id, updatedAtColumn: 1)
     }
 
     public func profiles(search: String? = nil, favoritesOnly: Bool = false) throws -> [ConnectionProfile] {
@@ -286,7 +286,7 @@ public actor ProfileDatabase {
         var clauses: [String] = []
         if favoritesOnly { clauses.append("favorite = 1") }
         let whereClause = clauses.isEmpty ? "" : " WHERE " + clauses.joined(separator: " AND ")
-        let sql = "SELECT id, payload FROM profiles\(whereClause) ORDER BY favorite DESC, updated_at DESC, name COLLATE NOCASE LIMIT \(Self.maximumProfileCount + 1);"
+        let sql = "SELECT id, payload, updated_at FROM profiles\(whereClause) ORDER BY favorite DESC, updated_at DESC, name COLLATE NOCASE LIMIT \(Self.maximumProfileCount + 1);"
         let statement = try prepare(sql)
         defer { sqlite3_finalize(statement) }
         let query = search.flatMap { $0.isEmpty ? nil : $0 }
@@ -304,7 +304,7 @@ public actor ProfileDatabase {
                   let id = UUID(uuidString: String(cString: idText)) else {
                 throw ProfileDatabaseError.execute("Invalid profile identifier")
             }
-            let profile = try decodeProfile(statement, id: id, payloadColumn: 1)
+            let profile = try decodeProfile(statement, id: id, payloadColumn: 1, updatedAtColumn: 2)
             if let query {
                 if profile.matchesSearch(query) { result.append(profile) }
             } else {
@@ -665,7 +665,12 @@ public actor ProfileDatabase {
         }
     }
 
-    private func decodeProfile(_ statement: OpaquePointer, id: UUID, payloadColumn: Int32 = 0) throws -> ConnectionProfile {
+    private func decodeProfile(
+        _ statement: OpaquePointer,
+        id: UUID,
+        payloadColumn: Int32 = 0,
+        updatedAtColumn: Int32? = nil
+    ) throws -> ConnectionProfile {
         guard let bytes = sqlite3_column_blob(statement, payloadColumn) else {
             throw ProfileDatabaseError.decode(id, "Missing profile payload")
         }
@@ -674,9 +679,16 @@ public actor ProfileDatabase {
             throw ProfileDatabaseError.payloadTooLarge(Self.maximumProfilePayloadBytes)
         }
         do {
-            let profile = try decoder.decode(ConnectionProfile.self, from: Data(bytes: bytes, count: count))
+            var profile = try decoder.decode(ConnectionProfile.self, from: Data(bytes: bytes, count: count))
             guard profile.id == id else {
                 throw ProfileDatabaseError.decode(id, "The payload identifier does not match its database row.")
+            }
+            if let updatedAtColumn {
+                let storedUpdatedAt = sqlite3_column_double(statement, updatedAtColumn)
+                guard storedUpdatedAt.isFinite else {
+                    throw ProfileDatabaseError.decode(id, "The update timestamp is invalid.")
+                }
+                profile.updatedAt = Date(timeIntervalSince1970: storedUpdatedAt)
             }
             return try profile.validated()
         }
