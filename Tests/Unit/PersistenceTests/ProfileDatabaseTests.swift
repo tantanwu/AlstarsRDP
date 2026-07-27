@@ -298,6 +298,28 @@ final class ProfileDatabaseTests: XCTestCase {
         XCTAssertEqual(storedProfile?.name, "Current")
     }
 
+    func testStoredRevisionAcceptsSubsecondDatabaseRoundTrip() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let database = try ProfileDatabase(url: directory.appendingPathComponent("profiles.sqlite3"))
+        var profile = ConnectionProfile(
+            name: "Subsecond",
+            target: TargetIdentity(endpoint: Endpoint(host: "subsecond.example", port: 3389)),
+            updatedAt: Date(timeIntervalSince1970: 1_785_162_434.123_456)
+        )
+        try await database.save(profile)
+        profile.name = "Updated"
+
+        _ = try await database.saveAndReturnUnreferencedCredentialReferences(
+            profile,
+            expectedToExist: true,
+            expectedUpdatedAt: profile.updatedAt,
+            cleanupCandidates: Set()
+        )
+
+        let storedProfile = try await database.profile(id: profile.id)
+        XCTAssertEqual(storedProfile?.name, "Updated")
+    }
+
     func testDeleteReturnsCredentialReferencesNoLongerOwnedByProfiles() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let database = try ProfileDatabase(url: directory.appendingPathComponent("profiles.sqlite3"))

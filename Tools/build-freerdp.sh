@@ -91,6 +91,7 @@ build_architecture() {
   local install="${build}/install"
 
   openssl_root="$(openssl_root_for_architecture "${architecture}")"
+  rm -rf "${build}"
   cmake -S "${source_dir}" -B "${build}" -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_OSX_ARCHITECTURES="${architecture}" \
@@ -112,7 +113,8 @@ build_architecture() {
     -DWITH_FFMPEG=OFF \
     -DWITH_OPENH264=OFF \
     -DWITH_SWSCALE=OFF \
-    -DWITH_LIBUSB=OFF \
+    -DCHANNEL_URBDRC=OFF \
+    -DCHANNEL_URBDRC_CLIENT=OFF \
     -DWITH_CUPS=ON \
     -DWITH_PCSC=ON \
     -DWITH_MANPAGES=OFF \

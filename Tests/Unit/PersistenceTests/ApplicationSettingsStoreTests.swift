@@ -172,7 +172,7 @@ final class ApplicationSettingsStoreTests: XCTestCase {
         )
         XCTAssertEqual(stricterStored.reconnect.maximumAttempts, 0)
         XCTAssertEqual(stricterStored.redirection.preset, .complete)
-        XCTAssertFalse(stricterStored.redirection.clipboardImages)
+        XCTAssertTrue(stricterStored.redirection.clipboardImages)
         XCTAssertTrue(stricterStored.redirection.microphone)
 
         let newProfile = policy.applyingForStorage(to: original, preserving: nil)

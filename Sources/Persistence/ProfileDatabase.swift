@@ -191,8 +191,11 @@ public actor ProfileDatabase {
             if !expectedToExist, exists {
                 throw ProfileDatabaseError.staleProfile(profile.id)
             }
-            if let expectedUpdatedAt, current?.updatedAt != expectedUpdatedAt {
-                throw ProfileDatabaseError.staleProfile(profile.id)
+            if let expectedUpdatedAt {
+                guard let currentUpdatedAt = current?.updatedAt,
+                      Self.sameStoredTimestamp(currentUpdatedAt, expectedUpdatedAt) else {
+                    throw ProfileDatabaseError.staleProfile(profile.id)
+                }
             }
             try save(
                 profile,
@@ -696,6 +699,10 @@ public actor ProfileDatabase {
     }
 
     private var lastError: String { db.map { String(cString: sqlite3_errmsg($0)) } ?? "database closed" }
+
+    private static func sameStoredTimestamp(_ lhs: Date, _ rhs: Date) -> Bool {
+        abs(lhs.timeIntervalSince1970 - rhs.timeIntervalSince1970) <= 0.000_001
+    }
 }
 
 private extension ConnectionProfile {
