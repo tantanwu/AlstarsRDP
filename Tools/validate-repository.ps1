@@ -87,6 +87,10 @@ if ($projectText -notmatch 'ARCHS') {
     $baseConfig = Read-StrictUtf8 (Join-Path $root 'Config/Base.xcconfig')
     if ($baseConfig -notmatch 'ARCHS\s*=\s*arm64\s+x86_64') { Add-Failure 'Universal 2 architectures are not configured.' }
 }
+$generatedFrameworkPlists = [regex]::Matches($projectText, '(?m)^\s{8}GENERATE_INFOPLIST_FILE:\s*YES\s*$').Count
+if ($generatedFrameworkPlists -lt 6) {
+    Add-Failure 'Every application framework target must generate an Info.plist for code signing.'
+}
 
 $sourceText = (Get-ChildItem -LiteralPath (Join-Path $root 'Sources') -Recurse -File | Where-Object {
     @('.swift', '.m', '.mm', '.h') -contains $_.Extension
