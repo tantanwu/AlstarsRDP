@@ -1,0 +1,142 @@
+name: RemoteDesktop
+options:
+  minimumXcodeGenVersion: 2.38.0
+  developmentLanguage: en
+  deploymentTarget:
+    macOS: "11.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+configs:
+  Debug: debug
+  Release: release
+configFiles:
+  Debug: Config/Base.xcconfig
+  Release: Config/Release.xcconfig
+packages: {}
+targets:
+  RDPDomain:
+    type: framework
+    platform: macOS
+    sources: [Sources/RDPDomain]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.RemoteDesktop.Domain
+  Diagnostics:
+    type: framework
+    platform: macOS
+    sources: [Sources/Diagnostics]
+    dependencies:
+      - target: RDPDomain
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.RemoteDesktop.Diagnostics
+  RDPTransport:
+    type: framework
+    platform: macOS
+    sources: [Sources/RDPTransport]
+    dependencies:
+      - target: RDPDomain
+      - target: Diagnostics
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.RemoteDesktop.Transport
+  Persistence:
+    type: framework
+    platform: macOS
+    sources: [Sources/Persistence]
+    dependencies:
+      - target: RDPDomain
+      - target: Diagnostics
+      - sdk: Security.framework
+      - sdk: libsqlite3.tbd
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.RemoteDesktop.Persistence
+  RDPBridge:
+    type: framework
+    platform: macOS
+    sources: [Sources/RDPBridge]
+    headers:
+      public:
+        - Sources/RDPBridge/RDPSession.h
+    dependencies:
+      - framework: Vendor/build/universal/lib/libfreerdp3.dylib
+        embed: true
+        codeSign: true
+      - framework: Vendor/build/universal/lib/libfreerdp-client3.dylib
+        embed: true
+        codeSign: true
+      - framework: Vendor/build/universal/lib/libwinpr3.dylib
+        embed: true
+        codeSign: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.RemoteDesktop.Bridge
+        HEADER_SEARCH_PATHS:
+          - $(PROJECT_DIR)/Vendor/build/universal/include
+        LIBRARY_SEARCH_PATHS:
+          - $(PROJECT_DIR)/Vendor/build/universal/lib
+        CLANG_CXX_LANGUAGE_STANDARD: c++17
+  RDPRenderer:
+    type: framework
+    platform: macOS
+    sources: [Sources/RDPRenderer]
+    dependencies:
+      - target: RDPDomain
+      - target: RDPBridge
+      - sdk: Metal.framework
+      - sdk: MetalKit.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.RemoteDesktop.Renderer
+  RemoteDesktop:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/App
+        excludes:
+          - Resources
+      - path: Sources/App/Resources
+        buildPhase: resources
+    info:
+      path: Config/Info.plist
+    entitlements:
+      path: Config/RemoteDesktop.entitlements
+    dependencies:
+      - target: RDPDomain
+      - target: Diagnostics
+      - target: RDPTransport
+      - target: Persistence
+      - target: RDPBridge
+      - target: RDPRenderer
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.RemoteDesktop
+        PRODUCT_NAME: RemoteDesktop
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
+  RemoteDesktopTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests/Unit
+    dependencies:
+      - target: RDPDomain
+      - target: Diagnostics
+      - target: RDPTransport
+      - target: Persistence
+      - target: RDPRenderer
+      - target: RemoteDesktop
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.RemoteDesktop.Tests
+schemes:
+  RemoteDesktop:
+    build:
+      targets:
+        RemoteDesktop: all
+        RemoteDesktopTests: [test]
+    test:
+      gatherCoverageData: true
+      targets:
+        - RemoteDesktopTests

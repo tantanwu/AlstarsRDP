@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "dependencies": [
+    {
+      "name": "FreeRDP",
+      "version": "3.30.0",
+      "source": "https://github.com/FreeRDP/FreeRDP.git",
+      "commit": "6b107f0aadbabc47941c5a5b893b88c01792af6d",
+      "tagObject": "cc741756e3a07fe1e5f4661a59b2e4e85f1a148f",
+      "license": "Apache-2.0",
+      "deploymentTarget": "11.0",
+      "status": "candidate-pinned-awaiting-macos-validation"
+    }
+  ]
+}
+
