@@ -54,7 +54,8 @@ openssl_root_for_architecture() {
     echo "Static OpenSSL libraries are missing from ${configured}" >&2
     return 1
   }
-  lipo -verify_arch "${architecture}" "${configured}/lib/libssl.a" "${configured}/lib/libcrypto.a"
+  lipo "${configured}/lib/libssl.a" -verify_arch "${architecture}"
+  lipo "${configured}/lib/libcrypto.a" -verify_arch "${architecture}"
   printf '%s\n' "${configured}"
 }
 
@@ -71,7 +72,7 @@ validate_native_install() {
   done
   while IFS= read -r binary; do
     file "${binary}" | grep -q 'Mach-O' || continue
-    lipo -verify_arch "${architecture}" "${binary}"
+    lipo "${binary}" -verify_arch "${architecture}"
     while IFS= read -r dependency; do
       case "${dependency}" in
         /opt/homebrew/*|/usr/local/*)
@@ -159,7 +160,7 @@ merge_universal() {
     if [[ "${destination}" == *.dylib ]]; then
       install_name_tool -id "@rpath/$(basename "${destination}")" "${destination}"
     fi
-    lipo -verify_arch arm64 x86_64 "${destination}"
+    lipo "${destination}" -verify_arch arm64 x86_64
   done < <(find "${arm_install}/lib" -type f | sort)
 
   while IFS= read -r arm_link; do

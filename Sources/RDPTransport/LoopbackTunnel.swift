@@ -38,16 +38,12 @@ public final class LoopbackTunnel: @unchecked Sendable {
         let parameters = NWParameters.tcp
         parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: .any)
         let listener = try NWListener(using: parameters, on: .any)
-        lock.lock()
-        generation &+= 1
-        let currentGeneration = generation
-        self.target = target
-        self.route = route
-        self.credential = credential
-        self.listener = listener
-        isRunning = true
-        hasAcceptedConnection = false
-        lock.unlock()
+        let currentGeneration = prepare(
+            listener: listener,
+            target: target,
+            route: route,
+            credential: credential
+        )
 
         listener.newConnectionHandler = { [weak self] downstream in
             self?.accept(downstream, generation: currentGeneration)
@@ -80,6 +76,24 @@ public final class LoopbackTunnel: @unchecked Sendable {
             stop(generation: currentGeneration)
             throw error
         }
+    }
+
+    private func prepare(
+        listener: NWListener,
+        target: TargetIdentity,
+        route: RouteConfiguration,
+        credential: ProxyCredential?
+    ) -> UInt64 {
+        lock.lock()
+        defer { lock.unlock() }
+        generation &+= 1
+        self.target = target
+        self.route = route
+        self.credential = credential
+        self.listener = listener
+        isRunning = true
+        hasAcceptedConnection = false
+        return generation
     }
 
     public func stop() {

@@ -77,7 +77,7 @@ resolves_rpath_dependency() {
 
 while IFS= read -r binary; do
   file "${binary}" | grep -q 'Mach-O' || continue
-  lipo -verify_arch arm64 x86_64 "${binary}"
+  lipo "${binary}" -verify_arch arm64 x86_64
   codesign --verify --strict --verbose=2 "${binary}"
 
   for arch in arm64 x86_64; do

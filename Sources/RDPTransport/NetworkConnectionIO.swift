@@ -42,12 +42,12 @@ extension NWConnection {
 
     func sendAll(_ data: Data) async throws {
         try await withTaskCancellationHandler(operation: {
-            try await withCheckedThrowingContinuation { continuation in
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                 send(content: data, completion: .contentProcessed { error in
                     if let error { continuation.resume(throwing: error) }
                     else { continuation.resume(returning: ()) }
                 })
-            })
+            }
         }, onCancel: { cancel() })
     }
 
