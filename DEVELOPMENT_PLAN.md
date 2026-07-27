@@ -1,7 +1,7 @@
 # macOS RDP 远程桌面客户端：完整开发与进度跟踪文档
 
-> 文档状态：执行中（M0 macOS 构建与实机验证受阻）  
-> 文档版本：0.2.3  
+> 文档状态：执行中（GitHub Actions 计费门禁阻塞 Universal 2 首次构建）
+> 文档版本：0.2.4
 > 最后更新：2026-07-27  
 > 目标平台：macOS 11 Big Sur 及以上，Intel x86_64 与 Apple Silicon arm64  
 > 目标系统：支持 RDP 的 Windows Pro、Enterprise、Windows Server  
@@ -635,7 +635,7 @@ RemoteDesktop/
 - [~] `M1-05` 连接模型、SQLite schema v1、WAL、迁移框架、配置大小门禁、回滚失败报告、三文件隔离恢复事务及删除事务已编写，待测试运行和损坏恢复验收。
 - [~] `M1-06` Keychain 隔离引用、临时凭据、两阶段写入、删除后清理及回滚残留错误报告已编写，待 macOS Keychain 故障注入测试。
 - [~] `M1-07` 结构化诊断、错误分类、敏感字段脱敏及私有字段导出限制测试已编写，待测试运行和隐私评审。
-- [~] `M1-08` macOS CI 和双架构检查已编写，待首次成功流水线。
+- [~] `M1-08` GitHub Actions 双架构 CI 已建立；arm64/x86_64 Swift 94 项测试已通过，FreeRDP 两架构已完成编译和安装阶段；待解除 Actions 预算门禁并通过原生依赖闭包及 Universal 2 应用任务。
 - [~] `M1-09` 已记录线程隔离临时 ADR；XPC 原型和最终决策未完成。
 
 ### 13.3 M2：核心远程桌面
@@ -708,12 +708,12 @@ RemoteDesktop/
 | 指标 | 当前值 | 更新时间 |
 |---|---:|---|
 | 当前里程碑 | M0 技术验证与基线 | 2026-07-27 |
-| 总体状态 | 开发中（Windows 主机无法执行 macOS 构建/验收） | 2026-07-27 |
+| 总体状态 | 开发中（CI 已建立，私有仓库 Actions 的 `$0` 停止预算阻塞新任务） | 2026-07-27 |
 | 已完成任务 | 0 | 2026-07-27 |
 | P0 未关闭缺陷 | 0 | 2026-07-27 |
 | P1 未关闭缺陷 | 0 | 2026-07-27 |
-| 最大风险 | FreeRDP/通道依赖尚未在 macOS 11 Universal 2 工具链完成首次构建 | 2026-07-27 |
-| 下一门禁 | macOS 首次依赖构建、XcodeGen 与双架构 Debug build | 待提供 Mac 构建环境 |
+| 最大风险 | FreeRDP 原生依赖闭包和 Universal 2 应用尚未完成首次成功流水线 | 2026-07-27 |
+| 下一门禁 | 恢复 GitHub Actions runner，验证禁用 USB/外部 JSON 后的依赖闭包并构建 Universal 2 App | 待调整 Actions 预算或仓库可见性 |
 
 ### 14.2 当前实现快照
 
@@ -721,7 +721,7 @@ RemoteDesktop/
 
 | 领域 | 已写入源码 | 尚缺的完成证据/实现 |
 |---|---|---|
-| 工程与依赖 | XcodeGen、SwiftPM、CMake/FreeRDP、Universal 2、归档/公证脚本和 macOS CI | 首次 macOS 构建；锁定 Universal 2 OpenSSL；确认 dylib 与通道插件打包 |
+| 工程与依赖 | XcodeGen、SwiftPM、CMake/FreeRDP、Universal 2、归档/公证脚本和 macOS CI；GitHub hosted arm64/x86_64 已分别编译并安装 FreeRDP 3.30.0，依赖闭包门禁已识别并关闭 USB 与外部 JSON 动态依赖 | 最新 FreeRDP 依赖闭包复跑；锁定 Universal 2 OpenSSL；确认 dylib 与通道插件打包；Universal 2 App 构建 |
 | 配置与凭据 | SQLite schema v1/WAL、名称/主机/标签搜索、严格 schema、流式输入大小门禁、版本化备份/恢复、数据库/WAL/SHM 批量隔离及失败回滚、导入/迁移回滚失败报告、配置删除事务、凭据唯一所有权、乐观并发、删除/更新竞态防护，三类 Keychain 隔离引用，跨存储事务串行化、临时凭据提示，以及写入/落库/旧引用清理和回滚残留报告；备份剥离全部 Keychain 引用和共享目录授权，恢复清理无引用 Keychain 项 | macOS SQLite/Keychain 测试；并发、故障注入与恢复路径人工验收 |
 | 网络代理 | Direct、SOCKS5、HTTP/HTTPS CONNECT、仅 loopback 随机端口隧道、代次化停止/失败连接回收、目标/代理/网关统一校验、SOCKS5 域名及 IPv4/IPv6 ATYP、代理端 DNS、Basic、防注入、编码前请求/凭据边界、响应上限、临时代理凭据和 15 秒路径测试；未实现的本机目标 DNS 模式当前明确拒绝 | 真实代理集成测试；PAC、本机目标 DNS 和企业代理矩阵 |
 | RDP 核心 | FreeRDP TLS/NLA、禁用旧 RDP Security、原始证书名、RD Gateway、取消、证书决策桥接及受限终态转换 | macOS 编译；Windows/RD Gateway 实测；认证/错误码矩阵 |
@@ -729,7 +729,7 @@ RemoteDesktop/
 | 资源重定向 | FreeRDP 能力开关；用户选目录、安全书签、书签元数据边界和会话级授权生命周期 | 以 3.30.0 头文件完成 rdpdr 设备注册；剪贴板控制器、通道打包和音频/设备实测 |
 | 企业管理 | MDM/强制偏好解析；重连、缩放、重定向上限；禁止保存凭据；禁止私有诊断导出；设置 UI 锁定和连接前再次收敛 | Swift 5.7/macOS 11 编译；真实 MDM 下发、移除与绕过测试；管理员签收 |
 | 诊断与安全 | 结构化路由/会话事件、私有字段哈希、敏感字段入口拒绝、诊断预览/清理/脱敏导出，以及文件、配置、凭据和帧缓冲大小门禁 | 崩溃收集策略、安全评审和 fuzz/长稳证据 |
-| 静态门禁 | Windows 仓库校验脚本已检查 UTF-8、JSON、plist、依赖固定字段、本地化键/占位符和 deployment target；Universal 2 脚本逐 Mach-O/逐架构检查 slice、签名、macOS 11 最低版本、`LC_RPATH` 和运行时依赖闭包 | Mac Swift/Objective-C++ 编译、测试，以及 Universal 2/签名门禁实际运行 |
+| 静态门禁 | Windows 仓库校验脚本已检查 UTF-8、JSON、plist、依赖固定字段、本地化键/占位符和 deployment target；GitHub arm64/x86_64 已分别通过 94 项 Swift 单元测试；Universal 2 脚本逐 Mach-O/逐架构检查 slice、签名、macOS 11 最低版本、`LC_RPATH` 和运行时依赖闭包 | Objective-C++/AppKit 测试，以及 Universal 2/签名门禁实际运行 |
 
 ### 14.3 当前阻塞项
 
@@ -741,6 +741,7 @@ RemoteDesktop/
 | BLOCK-003 | Universal 2 OpenSSL 来源尚未锁定 | 分别构建 arm64/x86_64 OpenSSL 并记录版本、哈希和许可证 | FreeRDP x86_64 slice 可能在 Apple Silicon 构建机失败 |
 | BLOCK-004 | 无 Windows/RD Gateway/企业代理测试实验室 | 提供受控目标与测试账号，不在仓库或日志中存储秘密 | Direct/NLA、代理、网关、证书和通道不能完成验收 |
 | BLOCK-006 | 最终 Bundle Identifier、Keychain service prefix、签名团队和产品标识未确定，当前仍为 `com.example.RemoteDesktop` | 产品/发布负责人分配正式反向域名标识并完成迁移评审 | 不能生成正式签名、公证和可升级的发布包 |
+| BLOCK-007 | 私有仓库的 GitHub Actions 预算为 `$0` 且启用 `Stop usage`，运行 `30276345265` 在分配 runner 前被拒绝 | 在 GitHub `Settings > Billing and licensing > Budgets and alerts` 提高 Actions 预算并确保付款方式有效，或经安全评审后将仓库改为公开 | 无法复跑 FreeRDP 依赖闭包、构建 Universal 2 App 和生成 artifact |
 
 ### 14.4 每周状态模板
 
