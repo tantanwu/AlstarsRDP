@@ -153,6 +153,13 @@ merge_universal() {
   cp -R "${arm_install}/include/." "${universal}/include/"
   cp -R "${arm_install}/share/." "${universal}/share/" 2>/dev/null || true
 
+  for required_header in freerdp3/freerdp/client.h winpr3/winpr/crt.h; do
+    [[ -f "${universal}/include/${required_header}" ]] || {
+      echo "Required universal header is missing: ${required_header}" >&2
+      return 1
+    }
+  done
+
   while IFS= read -r arm_file; do
     file "${arm_file}" | grep -q 'Mach-O' || continue
     relative="${arm_file#${arm_install}/lib/}"
