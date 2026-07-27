@@ -125,7 +125,16 @@ while IFS= read -r binary; do
         exit 1
         ;;
     esac
-  done < <(otool -L "${binary}" | tail -n +2 | sed -E 's/^[[:space:]]+//; s/ \(compatibility version.*$//')
+  done < <(
+    otool -L "${binary}" | awk '
+      /^[[:space:]]+/ {
+        line = $0
+        sub(/^[[:space:]]+/, "", line)
+        sub(/ \(compatibility version.*$/, "", line)
+        print line
+      }
+    '
+  )
 done < <(find "${app}/Contents" -type f | sort)
 codesign --verify --deep --strict --verbose=2 "${app}"
 if [[ "${mode}" != "--pre-notarization" ]]; then
