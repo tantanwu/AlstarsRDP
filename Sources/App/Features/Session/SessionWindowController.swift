@@ -450,7 +450,10 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
         notifications.addObserver(self, selector: #selector(systemWillSleep), name: NSWorkspace.willSleepNotification, object: nil)
         notifications.addObserver(self, selector: #selector(systemDidWake), name: NSWorkspace.didWakeNotification, object: nil)
         networkPathMonitor.pathUpdateHandler = { [weak self] path in
-            DispatchQueue.main.async { self?.networkPathDidChange(isAvailable: path.status == .satisfied) }
+            let isAvailable = path.status == .satisfied
+            DispatchQueue.main.async { [weak self] in
+                self?.networkPathDidChange(isAvailable: isAvailable)
+            }
         }
         networkPathMonitor.start(queue: networkPathQueue)
     }
