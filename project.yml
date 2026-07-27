@@ -66,14 +66,11 @@ targets:
         - Sources/RDPBridge/RDPSession.h
     dependencies:
       - framework: Vendor/build/universal/lib/libfreerdp3.dylib
-        embed: true
-        codeSign: true
+        embed: false
       - framework: Vendor/build/universal/lib/libfreerdp-client3.dylib
-        embed: true
-        codeSign: true
+        embed: false
       - framework: Vendor/build/universal/lib/libwinpr3.dylib
-        embed: true
-        codeSign: true
+        embed: false
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES

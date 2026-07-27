@@ -91,6 +91,13 @@ $generatedFrameworkPlists = [regex]::Matches($projectText, '(?m)^\s{8}GENERATE_I
 if ($generatedFrameworkPlists -lt 6) {
     Add-Failure 'Every application framework target must generate an Info.plist for code signing.'
 }
+$linkedNativeLibraries = [regex]::Matches(
+    $projectText,
+    '(?m)^\s*- framework: Vendor/build/universal/lib/[^\r\n]+\.dylib\r?\n\s+embed:\s*false\s*$'
+).Count
+if ($linkedNativeLibraries -ne 3) {
+    Add-Failure 'RDPBridge native libraries must link without creating a nested runtime tree.'
+}
 
 $sourceText = (Get-ChildItem -LiteralPath (Join-Path $root 'Sources') -Recurse -File | Where-Object {
     @('.swift', '.m', '.mm', '.h') -contains $_.Extension
