@@ -47,6 +47,13 @@ expanded_rpath() {
   esac
 }
 
+binary_rpaths() {
+  local binary="$1"
+  { otool -l "${main}"; [[ "${binary}" == "${main}" ]] || otool -l "${binary}"; } |
+    awk '$1 == "cmd" && $2 == "LC_RPATH" { wanted = 1; next } wanted && $1 == "path" { print $2; wanted = 0 }' |
+    sort -u
+}
+
 resolved_bundle_path() {
   local path="$1"
   local target
@@ -79,12 +86,19 @@ resolves_rpath_dependency() {
     expanded="$(expanded_rpath "${rpath}" "${binary}")" || continue
     candidate="${expanded}/${relative}"
     resolved_bundle_path "${candidate}" >/dev/null && return 0
-  done < <(
-    { otool -l "${main}"; [[ "${binary}" == "${main}" ]] || otool -l "${binary}"; } |
-      awk '$1 == "cmd" && $2 == "LC_RPATH" { wanted = 1; next } wanted && $1 == "path" { print $2; wanted = 0 }' |
-      sort -u
-  )
+  done < <(binary_rpaths "${binary}")
   resolved_bundle_path "${app}/Contents/Frameworks/${relative}" >/dev/null
+}
+
+resolves_system_swift_core() {
+  local binary="$1"
+  local relative="$2"
+  local rpath
+  [[ "${relative}" == "libswiftCore.dylib" ]] || return 1
+  while IFS= read -r rpath; do
+    [[ "${rpath}" == "/usr/lib/swift" ]] && return 0
+  done < <(binary_rpaths "${binary}")
+  return 1
 }
 
 while IFS= read -r binary; do
@@ -109,7 +123,8 @@ while IFS= read -r binary; do
         ;;
       @rpath/*)
         relative="${dependency#@rpath/}"
-        resolves_rpath_dependency "${binary}" "${relative}" || {
+        resolves_rpath_dependency "${binary}" "${relative}" ||
+          resolves_system_swift_core "${binary}" "${relative}" || {
           echo "Unresolved bundled dependency for ${binary}: ${dependency}" >&2
           exit 1
         }

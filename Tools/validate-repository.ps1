@@ -155,7 +155,7 @@ $universalVerifier = Read-StrictUtf8 (Join-Path $root 'Tools/verify-universal.sh
 if ($universalVerifier -match 'spctl[^\r\n]*\|\|\s*true') {
     Add-Failure 'Gatekeeper failures must not be silently ignored.'
 }
-foreach ($requiredCheck in @('otool -L', '/opt/homebrew/', '/usr/local/', 'Vendor/build/', 'vtool', '-show-build')) {
+foreach ($requiredCheck in @('otool -L', '/opt/homebrew/', '/usr/local/', '/usr/lib/swift', 'libswiftCore.dylib', 'Vendor/build/', 'vtool', '-show-build')) {
     if (-not $universalVerifier.Contains($requiredCheck)) {
         Add-Failure "verify-universal.sh is missing runtime closure check: $requiredCheck"
     }
