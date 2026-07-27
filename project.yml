@@ -58,6 +58,7 @@ targets:
     sources: [Sources/RDPBridge]
     headers:
       public:
+        - Sources/RDPBridge/RDPBridge.h
         - Sources/RDPBridge/RDPSession.h
     dependencies:
       - framework: Vendor/build/universal/lib/libfreerdp3.dylib
