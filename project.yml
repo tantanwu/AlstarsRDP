@@ -1,6 +1,7 @@
 name: RemoteDesktop
 options:
   minimumXcodeGenVersion: 2.38.0
+  xcodeVersion: "15.4"
   developmentLanguage: en
   deploymentTarget:
     macOS: "11.0"

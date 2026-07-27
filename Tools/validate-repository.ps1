@@ -83,6 +83,7 @@ foreach ($key in $usedKeys) {
 
 $projectText = Read-StrictUtf8 (Join-Path $root 'project.yml')
 if ($projectText -notmatch 'macOS:\s*"11\.0"') { Add-Failure 'project.yml must retain the macOS 11.0 deployment target.' }
+if ($projectText -notmatch 'xcodeVersion:\s*"15\.4"') { Add-Failure 'project.yml must generate an Xcode 15.4-compatible project.' }
 if ($projectText -notmatch 'ARCHS') {
     $baseConfig = Read-StrictUtf8 (Join-Path $root 'Config/Base.xcconfig')
     if ($baseConfig -notmatch 'ARCHS\s*=\s*arm64\s+x86_64') { Add-Failure 'Universal 2 architectures are not configured.' }
