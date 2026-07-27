@@ -76,10 +76,18 @@ jobs:
   app-build:
     name: Universal 2 app
     needs: [domain-tests, freerdp-arch]
-    runs-on: macos-15
+    runs-on: macos-14
     timeout-minutes: 60
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_15.4.app/Contents/Developer
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Toolchain
+        run: |
+          sw_vers
+          uname -m
+          xcodebuild -version
+          swift --version
       - name: Download arm64 dependencies
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:

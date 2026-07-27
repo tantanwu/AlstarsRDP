@@ -118,6 +118,10 @@ foreach ($workflow in $workflowFiles) {
         }
     }
 }
+$macOSWorkflow = Read-StrictUtf8 (Join-Path $root '.github/workflows/macos.yml')
+if ($macOSWorkflow -notmatch 'DEVELOPER_DIR:\s*/Applications/Xcode_15\.4\.app/Contents/Developer') {
+    Add-Failure 'The Universal 2 app job must use the macOS 11-compatible Xcode 15.4 toolchain.'
+}
 
 $bootstrapText = Read-StrictUtf8 (Join-Path $root 'Tools/bootstrap-macos.sh')
 $archiveText = Read-StrictUtf8 (Join-Path $root 'Tools/archive.sh')
