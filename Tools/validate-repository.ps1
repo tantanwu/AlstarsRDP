@@ -123,6 +123,12 @@ $macOSWorkflow = Read-StrictUtf8 (Join-Path $root '.github/workflows/macos.yml')
 if ($macOSWorkflow -notmatch 'DEVELOPER_DIR:\s*/Applications/Xcode_15\.4\.app/Contents/Developer') {
     Add-Failure 'The Universal 2 app job must use the macOS 11-compatible Xcode 15.4 toolchain.'
 }
+if ($macOSWorkflow -notmatch 'XCODEGEN_VERSION:\s*2\.41\.0') {
+    Add-Failure 'The Universal 2 app job must pin XcodeGen 2.41.0.'
+}
+if ($macOSWorkflow -notmatch 'XCODEGEN_SHA256:\s*[0-9a-f]{64}') {
+    Add-Failure 'The pinned XcodeGen archive must have a SHA-256 digest.'
+}
 
 $bootstrapText = Read-StrictUtf8 (Join-Path $root 'Tools/bootstrap-macos.sh')
 $archiveText = Read-StrictUtf8 (Join-Path $root 'Tools/archive.sh')
