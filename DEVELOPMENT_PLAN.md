@@ -1,7 +1,7 @@
 # macOS RDP 远程桌面客户端：完整开发与进度跟踪文档
 
-> 文档状态：执行中（GitHub Actions 计费门禁阻塞 Universal 2 首次构建）
-> 文档版本：0.2.4
+> 文档状态：执行中（Universal 2 CI 与 macOS 11 Intel 启动已通过，继续 M0 实网与双平台验收）
+> 文档版本：0.2.5
 > 最后更新：2026-07-27  
 > 目标平台：macOS 11 Big Sur 及以上，Intel x86_64 与 Apple Silicon arm64  
 > 目标系统：支持 RDP 的 Windows Pro、Enterprise、Windows Server  
@@ -613,29 +613,29 @@ RemoteDesktop/
 
 ### 13.1 M0：技术验证与基线
 
-- [~] `M0-01` 已锁定 FreeRDP 3.30.0/commit，许可证已记录；CVE 审查和 macOS 验证未完成。
-- [ ] `M0-02` 在 macOS 11 Intel 构建并运行 x86_64 最小客户端。
-- [ ] `M0-03` 在 Apple Silicon 构建并运行 arm64 客户端。
-- [ ] `M0-04` 合成 Universal 2 并验证所有内嵌依赖 slice。
+- [~] `M0-01` 已锁定 FreeRDP 3.30.0/commit，许可证已记录，CI 双架构编译和 macOS 11 运行时加载已通过；CVE 审查和 Windows 连接验证未完成。
+- [x] `M0-02` GitHub Actions 已构建 x86_64 slice，产物已在 macOS 11.7.10 Intel 实机启动并稳定运行。
+- [~] `M0-03` arm64 Swift 测试、FreeRDP 编译及 Universal 2 slice 已通过；待 macOS 11 Apple Silicon 实机启动。
+- [x] `M0-04` 已合成 Universal 2，并在 CI 和 macOS 11 Intel 实机验证应用内全部 12 个 Mach-O 文件同时包含 arm64/x86_64 slice。
 - [ ] `M0-05` 连接 Windows 10/11 和 Server，验证 TLS/NLA。
 - [~] `M0-06` SOCKS5 和 HTTP CONNECT 隧道源码及解析器测试已编写，待 macOS 集成测试。
 - [~] `M0-07` 已实现 `CertificateName` 原始目标传递，待真实证书验证。
 - [~] `M0-08` Core Graphics fallback、帧缩放和基本键鼠源码已实现，待 Mac 首帧与输入验收。
 - [~] `M0-09` Metal 纹理上传和输入坐标原型已编写，待性能验证。
 - [ ] `M0-10` 验证 RD Gateway、音频、磁盘、多屏及各重定向能力。
-- [ ] `M0-11` 验证 Xcode、deployment target、签名、公证组合。
+- [~] `M0-11` Xcode 15.4、11.0 deployment target、Swift Concurrency 回部署和 ad-hoc 签名组合已通过；Developer ID 签名与公证未验证。
 - [~] `M0-12` 能力矩阵与 ADR 已建立；性能基线和实测工期待 Mac 实验室。
 
 ### 13.2 M1：核心骨架
 
-- [~] `M1-01` 仓库、XcodeGen/CMake 配置已建立，待 Xcode 生成和静态分析验证。
-- [~] `M1-02` FreeRDP 固定版本双架构脚本已建立；OpenSSL 和通道打包仍需完善。
-- [~] `M1-03` Bridge API、所有权、主线程回调和原生取消源码已实现，待编译评审。
-- [~] `M1-04` 会话状态机及单元测试已编写，待测试运行。
-- [~] `M1-05` 连接模型、SQLite schema v1、WAL、迁移框架、配置大小门禁、回滚失败报告、三文件隔离恢复事务及删除事务已编写，待测试运行和损坏恢复验收。
+- [~] `M1-01` 仓库、XcodeGen/CMake 配置已建立，Xcode 15.4 工程生成和 Release/Debug 编译已通过；静态分析仍待验证。
+- [~] `M1-02` FreeRDP 3.30.0 双架构编译、合并和运行时打包已通过；OpenSSL 精确来源锁定和全部通道能力验证仍需完成。
+- [~] `M1-03` Bridge API、所有权、主线程回调和原生取消源码已实现并编译通过，待专项代码评审和竞态测试。
+- [x] `M1-04` 会话状态机及其单元测试已在 arm64/x86_64 两套 Swift 测试任务中通过。
+- [~] `M1-05` 连接模型、SQLite schema v1、WAL、迁移框架、配置大小门禁、回滚失败报告、三文件隔离恢复事务及删除事务已编写并通过自动化测试；损坏恢复人工验收未完成。
 - [~] `M1-06` Keychain 隔离引用、临时凭据、两阶段写入、删除后清理及回滚残留错误报告已编写，待 macOS Keychain 故障注入测试。
-- [~] `M1-07` 结构化诊断、错误分类、敏感字段脱敏及私有字段导出限制测试已编写，待测试运行和隐私评审。
-- [~] `M1-08` GitHub Actions 双架构 CI 已建立；arm64/x86_64 Swift 94 项测试已通过，FreeRDP 两架构已完成编译和安装阶段；待解除 Actions 预算门禁并通过原生依赖闭包及 Universal 2 应用任务。
+- [~] `M1-07` 结构化诊断、错误分类、敏感字段脱敏及私有字段导出限制测试已编写并通过自动化测试，待隐私评审。
+- [x] `M1-08` GitHub Actions 双架构 CI 已建立并在运行 `30288609403` 全部通过：arm64/x86_64 各 94 项 Swift 测试、FreeRDP 双架构编译、AppKit/renderer 测试、Universal 2 构建、签名和依赖闭包门禁均成功。
 - [~] `M1-09` 已记录线程隔离临时 ADR；XPC 原型和最终决策未完成。
 
 ### 13.3 M2：核心远程桌面
@@ -708,12 +708,12 @@ RemoteDesktop/
 | 指标 | 当前值 | 更新时间 |
 |---|---:|---|
 | 当前里程碑 | M0 技术验证与基线 | 2026-07-27 |
-| 总体状态 | 开发中（CI 已建立，私有仓库 Actions 的 `$0` 停止预算阻塞新任务） | 2026-07-27 |
-| 已完成任务 | 0 | 2026-07-27 |
+| 总体状态 | 开发中（Universal 2 CI 与 macOS 11 Intel 启动已通过，M0 实网和 Apple Silicon 验收待完成） | 2026-07-27 |
+| 已完成任务 | 4 | 2026-07-27 |
 | P0 未关闭缺陷 | 0 | 2026-07-27 |
 | P1 未关闭缺陷 | 0 | 2026-07-27 |
-| 最大风险 | FreeRDP 原生依赖闭包和 Universal 2 应用尚未完成首次成功流水线 | 2026-07-27 |
-| 下一门禁 | 恢复 GitHub Actions runner，验证禁用 USB/外部 JSON 后的依赖闭包并构建 Universal 2 App | 待调整 Actions 预算或仓库可见性 |
+| 最大风险 | 尚无受控 Windows/RD Gateway/企业代理实验室，无法验证实际 TLS/NLA、代理、网关与重定向行为 | 2026-07-27 |
+| 下一门禁 | 完成 macOS 11 Apple Silicon 启动，并在受控 Windows 目标上执行 Direct、SOCKS5、HTTP CONNECT 与 TLS/NLA 验收 | 待提供测试设备和实验室 |
 
 ### 14.2 当前实现快照
 
@@ -721,27 +721,40 @@ RemoteDesktop/
 
 | 领域 | 已写入源码 | 尚缺的完成证据/实现 |
 |---|---|---|
-| 工程与依赖 | XcodeGen、SwiftPM、CMake/FreeRDP、Universal 2、归档/公证脚本和 macOS CI；GitHub hosted arm64/x86_64 已分别编译并安装 FreeRDP 3.30.0，依赖闭包门禁已识别并关闭 USB 与外部 JSON 动态依赖 | 最新 FreeRDP 依赖闭包复跑；锁定 Universal 2 OpenSSL；确认 dylib 与通道插件打包；Universal 2 App 构建 |
+| 工程与依赖 | XcodeGen、SwiftPM、CMake/FreeRDP、Universal 2、归档/公证脚本和 macOS CI；GitHub hosted arm64/x86_64 已分别编译 FreeRDP 3.30.0；运行 `30288609403` 已通过 Xcode 15.4 Universal 2 构建、签名、依赖闭包和 artifact 上传；产物已在 macOS 11 Intel 启动 | 锁定 OpenSSL 精确版本/来源/哈希；验证全部通道插件；macOS 11 Apple Silicon 启动；Developer ID 签名与公证 |
 | 配置与凭据 | SQLite schema v1/WAL、名称/主机/标签搜索、严格 schema、流式输入大小门禁、版本化备份/恢复、数据库/WAL/SHM 批量隔离及失败回滚、导入/迁移回滚失败报告、配置删除事务、凭据唯一所有权、乐观并发、删除/更新竞态防护，三类 Keychain 隔离引用，跨存储事务串行化、临时凭据提示，以及写入/落库/旧引用清理和回滚残留报告；备份剥离全部 Keychain 引用和共享目录授权，恢复清理无引用 Keychain 项 | macOS SQLite/Keychain 测试；并发、故障注入与恢复路径人工验收 |
 | 网络代理 | Direct、SOCKS5、HTTP/HTTPS CONNECT、仅 loopback 随机端口隧道、代次化停止/失败连接回收、目标/代理/网关统一校验、SOCKS5 域名及 IPv4/IPv6 ATYP、代理端 DNS、Basic、防注入、编码前请求/凭据边界、响应上限、临时代理凭据和 15 秒路径测试；未实现的本机目标 DNS 模式当前明确拒绝 | 真实代理集成测试；PAC、本机目标 DNS 和企业代理矩阵 |
-| RDP 核心 | FreeRDP TLS/NLA、禁用旧 RDP Security、原始证书名、RD Gateway、取消、证书决策桥接及受限终态转换 | macOS 编译；Windows/RD Gateway 实测；认证/错误码矩阵 |
-| 会话与输入 | 独立 session ID、旧回调过滤、有限退避、睡眠/网络路径处理、Metal/Core Graphics 自动回退、统一帧边界校验、256 MiB 单帧上限、仅保留最新帧、边界坐标、拖拽 MOVE、两种 Command 模式、全屏和安全序列 | Objective-C++ 帧关闭竞态编译验证；动态分辨率更新；键盘布局与实机性能矩阵 |
+| RDP 核心 | FreeRDP TLS/NLA、禁用旧 RDP Security、原始证书名、RD Gateway、取消、证书决策桥接及受限终态转换；macOS Universal 2 编译和 Big Sur 运行时加载已通过 | Windows/RD Gateway 实测；认证/错误码矩阵 |
+| 会话与输入 | 独立 session ID、旧回调过滤、有限退避、睡眠/网络路径处理、Metal/Core Graphics 自动回退、统一帧边界校验、256 MiB 单帧上限、仅保留最新帧、边界坐标、拖拽 MOVE、两种 Command 模式、全屏和安全序列；Objective-C++/AppKit/renderer 已编译测试 | 帧关闭竞态实测；动态分辨率更新；键盘布局与实机性能矩阵 |
 | 资源重定向 | FreeRDP 能力开关；用户选目录、安全书签、书签元数据边界和会话级授权生命周期 | 以 3.30.0 头文件完成 rdpdr 设备注册；剪贴板控制器、通道打包和音频/设备实测 |
-| 企业管理 | MDM/强制偏好解析；重连、缩放、重定向上限；禁止保存凭据；禁止私有诊断导出；设置 UI 锁定和连接前再次收敛 | Swift 5.7/macOS 11 编译；真实 MDM 下发、移除与绕过测试；管理员签收 |
+| 企业管理 | MDM/强制偏好解析；重连、缩放、重定向上限；禁止保存凭据；禁止私有诊断导出；设置 UI 锁定和连接前再次收敛；macOS 11 deployment target 编译已通过 | 真实 MDM 下发、移除与绕过测试；管理员签收 |
 | 诊断与安全 | 结构化路由/会话事件、私有字段哈希、敏感字段入口拒绝、诊断预览/清理/脱敏导出，以及文件、配置、凭据和帧缓冲大小门禁 | 崩溃收集策略、安全评审和 fuzz/长稳证据 |
-| 静态门禁 | Windows 仓库校验脚本已检查 UTF-8、JSON、plist、依赖固定字段、本地化键/占位符和 deployment target；GitHub arm64/x86_64 已分别通过 94 项 Swift 单元测试；Universal 2 脚本逐 Mach-O/逐架构检查 slice、签名、macOS 11 最低版本、`LC_RPATH` 和运行时依赖闭包 | Objective-C++/AppKit 测试，以及 Universal 2/签名门禁实际运行 |
+| 静态门禁 | Windows 仓库校验脚本已检查 UTF-8、JSON、plist、依赖固定字段、本地化键/占位符和 deployment target；GitHub arm64/x86_64 已分别通过 94 项 Swift 单元测试；Objective-C++/AppKit/renderer 测试已通过；Universal 2 脚本已实际逐 Mach-O/逐架构检查 slice、签名、macOS 11 最低版本、`LC_RPATH` 和运行时依赖闭包 | 静态分析、正式签名/公证门禁、长稳和真实连接测试 |
 
 ### 14.3 当前阻塞项
 
 | ID | 阻塞 | 解除条件 | 影响 |
 |---|---|---|---|
-| BLOCK-001 | 当前开发主机为 Windows 10，无 Xcode、Swift、Clang、CMake 和 XcodeGen | 提供 macOS 11+/Xcode 构建机或启用可运行的 macOS CI | 无法编译 Swift/Objective-C++、运行测试和实机验收 |
-| BLOCK-002 | 网络策略拒绝下载锁定的 FreeRDP 源码 | 在批准的 Mac 构建环境执行 `Tools/build-freerdp.sh` | 无法核对 3.30.0 通道/rdpdr API 和生成 Vendor 产物 |
-| BLOCK-005 | 本机策略明确禁止访问 GitHub/上游发布页面 | 在获准的依赖镜像或离线源码包中核对 OpenSSL 版本、commit 和 SHA-256 | 不能在当前环境可靠锁定 Universal 2 OpenSSL，禁止猜测依赖哈希 |
-| BLOCK-003 | Universal 2 OpenSSL 来源尚未锁定 | 分别构建 arm64/x86_64 OpenSSL 并记录版本、哈希和许可证 | FreeRDP x86_64 slice 可能在 Apple Silicon 构建机失败 |
+| BLOCK-003 | Universal 2 OpenSSL 来源尚未锁定 | 固定 arm64/x86_64 OpenSSL 的版本、来源、哈希和许可证，并在 CI 验证 | 构建虽已成功，但供应链不可复现且无法完成许可证/CVE 审计 |
 | BLOCK-004 | 无 Windows/RD Gateway/企业代理测试实验室 | 提供受控目标与测试账号，不在仓库或日志中存储秘密 | Direct/NLA、代理、网关、证书和通道不能完成验收 |
 | BLOCK-006 | 最终 Bundle Identifier、Keychain service prefix、签名团队和产品标识未确定，当前仍为 `com.example.RemoteDesktop` | 产品/发布负责人分配正式反向域名标识并完成迁移评审 | 不能生成正式签名、公证和可升级的发布包 |
-| BLOCK-007 | 私有仓库的 GitHub Actions 预算为 `$0` 且启用 `Stop usage`，运行 `30276345265` 在分配 runner 前被拒绝 | 在 GitHub `Settings > Billing and licensing > Budgets and alerts` 提高 Actions 预算并确保付款方式有效，或经安全评审后将仓库改为公开 | 无法复跑 FreeRDP 依赖闭包、构建 Universal 2 App 和生成 artifact |
+| BLOCK-008 | 尚无可用于验收的 macOS 11 Apple Silicon 实机 | 提供 Big Sur Apple Silicon 设备并运行同一 artifact 的启动、渲染和连接检查 | `M0-03` 和双平台发布兼容性不能关闭 |
+
+### 14.3.1 已解除阻塞
+
+| ID | 解除证据 | 解除日期 |
+|---|---|---|
+| BLOCK-001 | 已启用 macOS GitHub Actions，并使用 macOS 11.7.10 Intel 实机完成 artifact 启动验证 | 2026-07-27 |
+| BLOCK-002 | CI 已下载并在 arm64/x86_64 runner 上编译 FreeRDP 3.30.0 | 2026-07-27 |
+| BLOCK-005 | 公开仓库及 CI 已能访问 GitHub/上游；OpenSSL 的精确供应链锁定继续由 `BLOCK-003` 跟踪 | 2026-07-27 |
+| BLOCK-007 | 仓库已改为公开，[macOS #24](https://github.com/tantanwu/AlstarsRDP/actions/runs/30288609403) 全部成功 | 2026-07-27 |
+
+### 14.3.2 构建与实机证据
+
+- 成功提交：`d9348c2`；GitHub Actions 运行：[30288609403](https://github.com/tantanwu/AlstarsRDP/actions/runs/30288609403)。
+- 自动化结果：arm64/x86_64 各 94 项 Swift 测试通过，FreeRDP 3.30.0 双架构编译通过，AppKit/renderer 测试通过，Universal 2 签名与依赖闭包校验通过。
+- artifact：`AlstarsRDP-macOS11-Universal2-unsigned`，Actions SHA-256 `259ca089c922948f4afd1744ae10e254b2b993f6ea069c3ff62c4daf861e79bf`。
+- 实机：macOS 11.7.10 Intel x86_64；`LSMinimumSystemVersion=11.0`；12 个 Mach-O 文件均含 arm64/x86_64；`codesign --verify --deep --strict` 通过；应用启动后稳定运行 12 秒。
 
 ### 14.4 每周状态模板
 
@@ -884,6 +897,8 @@ RemoteDesktop/
 | 2026-07-27 | 0.2.1 | 凭据保存统一为两阶段事务；收紧会话终态；修复 Metal fallback、拖拽和键盘模式；隧道增加代次取消与连接回收；补齐多文件导入队列、SQLite 错误检查及 Windows 静态门禁 | 修复源码审查发现的数据一致性和生命周期问题；仍未达到任何里程碑退出条件 | Codex |
 | 2026-07-27 | 0.2.2 | 增加临时代理凭据与取消语义、配置删除和 Keychain 回滚事务、数据库回滚失败报告及三文件隔离恢复事务、企业 MDM 策略、统一路由校验、SOCKS5 IPv4/IPv6 ATYP、协议编码前边界、编辑器整数安全、帧合并与 256 MiB 边界，以及配置/归档/`.rdp`/凭据/共享书签输入门禁；文件导入改为有界流式读取；补充 Xcode 测试门禁和管理员文档 | 继续加固安全边界和故障一致性；所有新增项仍待 macOS 构建、自动化测试运行和实机验收 | Codex |
 | 2026-07-27 | 0.2.3 | 完成 Windows 全仓静态审计；增加标签搜索、配置/凭据唯一所有权、乐观并发和跨存储事务串行化；修复删除/更新、并发回滚、时间戳回退和恢复后 Keychain 残留；备份清除全部凭据引用；强化 `.rdp` 敏感键、HTTP CONNECT、文件面板兼容和逐架构 Universal 2 依赖闭包门禁；新增审计报告与测试 | 修复可由当前源码确认的问题并建立 Mac 首次构建/实机验收清单；已完成任务仍为 0 | Codex |
+| 2026-07-27 | 0.2.4 | 公开 GitHub 仓库并持续修复首次 macOS CI 中的 FreeRDP 头文件、Swift 并发、framework 元数据、Universal 2 依赖解析和签名问题 | 以真实 runner 结果逐项收敛构建问题，尚未完成首次全绿 | Codex |
+| 2026-07-27 | 0.2.5 | GitHub Actions `30288609403` 首次全绿；Universal 2 artifact 通过 macOS 11.7.10 Intel 双 slice、签名和 12 秒启动验证；关闭四个环境阻塞并完成 4 项任务 | 建立首个可复现的 macOS 11 Intel 构建与运行证据，继续 Apple Silicon、实网 RDP 和发布验收 | Codex |
 
 ---
 
