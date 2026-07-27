@@ -22,6 +22,17 @@ minimum_version() {
   ' | head -n 1
 }
 
+supports_macos_11() {
+  local version="$1"
+  awk -v version="${version}" 'BEGIN {
+    count = split(version, parts, ".")
+    if (count < 2) exit 1
+    major = parts[1] + 0
+    minor = parts[2] + 0
+    exit ! (major < 11 || (major == 11 && minor == 0))
+  }'
+}
+
 expanded_rpath() {
   local rpath="$1"
   local binary="$2"
@@ -82,8 +93,8 @@ while IFS= read -r binary; do
 
   for arch in arm64 x86_64; do
     version="$(minimum_version "${binary}" "${arch}")"
-    [[ "${version}" == "11.0" || "${version}" == "11.0.0" ]] || {
-      echo "Unexpected minimum macOS version for ${binary} (${arch}): ${version:-missing}" >&2
+    supports_macos_11 "${version}" || {
+      echo "Minimum macOS version exceeds 11.0 for ${binary} (${arch}): ${version:-missing}" >&2
       exit 1
     }
   done

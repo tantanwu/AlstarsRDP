@@ -118,6 +118,9 @@ targets:
           test -d "${source}"
           mkdir -p "${destination}"
           /usr/bin/ditto "${source}" "${destination}"
+          swift_runtime="${TOOLCHAIN_DIR}/usr/lib/swift-5.5/macosx/libswift_Concurrency.dylib"
+          test -f "${swift_runtime}"
+          /usr/bin/ditto "${swift_runtime}" "${destination}/libswift_Concurrency.dylib"
     dependencies:
       - target: RDPDomain
       - target: Diagnostics
@@ -131,6 +134,7 @@ targets:
         PRODUCT_NAME: RemoteDesktop
         ENABLE_HARDENED_RUNTIME: YES
         ENABLE_USER_SCRIPT_SANDBOXING: NO
+        ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES: NO
         CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
   RemoteDesktopTests:
     type: bundle.unit-test

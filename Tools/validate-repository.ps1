@@ -99,6 +99,12 @@ $linkedNativeLibraries = [regex]::Matches(
 if ($linkedNativeLibraries -ne 3) {
     Add-Failure 'RDPBridge native libraries must link without creating a nested runtime tree.'
 }
+if ($projectText -notmatch 'ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES:\s*NO') {
+    Add-Failure 'The app must replace the default Swift runtime with the macOS 11 back-deployment runtime.'
+}
+if (-not $projectText.Contains('usr/lib/swift-5.5/macosx/libswift_Concurrency.dylib')) {
+    Add-Failure 'The macOS 11 Swift concurrency back-deployment runtime is not embedded.'
+}
 
 $sourceText = (Get-ChildItem -LiteralPath (Join-Path $root 'Sources') -Recurse -File | Where-Object {
     @('.swift', '.m', '.mm', '.h') -contains $_.Extension
