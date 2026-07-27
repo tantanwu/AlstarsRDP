@@ -246,7 +246,7 @@ static int RDPLogonErrorInfo(freerdp *instance, UINT32 data, UINT32 type) {
     return 1;
 }
 
-static BOOL RDPSetString(rdpSettings *settings, size_t id, NSString *value) {
+static BOOL RDPSetString(rdpSettings *settings, FreeRDP_Settings_Keys_String id, NSString *value) {
     return freerdp_settings_set_string(settings, id, value.UTF8String);
 }
 
