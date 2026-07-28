@@ -4,6 +4,18 @@ import Persistence
 
 @main
 @MainActor
+enum RemoteDesktopApplication {
+    static func main() {
+        let application = NSApplication.shared
+        let delegate = AppDelegate()
+        application.delegate = delegate
+        withExtendedLifetime(delegate) {
+            application.run()
+        }
+    }
+}
+
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var libraryWindowController: ConnectionLibraryWindowController?
     private var pendingOpenFiles: [String] = []
@@ -22,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             libraryWindowController = controller
             buildMainMenu(settingsTarget: controller)
             controller.showWindow(nil)
+            controller.window?.makeKeyAndOrderFront(nil)
             openPendingFiles()
             NSApp.activate(ignoringOtherApps: true)
         } catch {
@@ -35,6 +48,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            libraryWindowController?.showWindow(nil)
+            libraryWindowController?.window?.makeKeyAndOrderFront(nil)
+        }
+        sender.activate(ignoringOtherApps: true)
+        return true
+    }
 
     func application(_ sender: NSApplication, openFiles filenames: [String]) {
         pendingOpenFiles.append(contentsOf: filenames)

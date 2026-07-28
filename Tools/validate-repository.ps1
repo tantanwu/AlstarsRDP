@@ -106,6 +106,14 @@ if (-not $projectText.Contains('usr/lib/swift-5.5/macosx/libswift_Concurrency.dy
     Add-Failure 'The macOS 11 Swift concurrency back-deployment runtime is not embedded.'
 }
 
+$appDelegateText = Read-StrictUtf8 (Join-Path $root 'Sources/App/Application/AppDelegate.swift')
+if ($appDelegateText -notmatch 'application\.delegate\s*=\s*delegate') {
+    Add-Failure 'The programmatic AppKit entry point must install its application delegate explicitly.'
+}
+if ($appDelegateText -notmatch 'withExtendedLifetime\s*\(\s*delegate\s*\)') {
+    Add-Failure 'The programmatic AppKit entry point must retain its delegate for the application run loop.'
+}
+
 $sourceText = (Get-ChildItem -LiteralPath (Join-Path $root 'Sources') -Recurse -File | Where-Object {
     @('.swift', '.m', '.mm', '.h') -contains $_.Extension
 } | ForEach-Object { Read-StrictUtf8 $_.FullName }) -join "`n"
