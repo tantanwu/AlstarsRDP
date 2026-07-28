@@ -708,7 +708,7 @@ RemoteDesktop/
 | 指标 | 当前值 | 更新时间 |
 |---|---:|---|
 | 当前里程碑 | M0 技术验证与基线 | 2026-07-28 |
-| 总体状态 | 开发中（Universal 2 CI 已通过；macOS 11 Intel 已创建主窗口并修复配置端口，真实 SOCKS5/HTTP CONNECT 路径可达；待 RDP 首帧和 Apple Silicon 验收） | 2026-07-28 |
+| 总体状态 | 开发中（Universal 2 CI 已通过；macOS 11 Intel 已创建主窗口并修复配置端口；真实 SOCKS5/HTTP CONNECT 路径可达；FreeRDP 预连接初始化和设置页累计偏移已修复并通过 CI；待 RDP 首帧、设置页真机复验和 Apple Silicon 验收） | 2026-07-28 |
 | 已完成任务 | 3 | 2026-07-28 |
 | P0 未关闭缺陷 | 0 | 2026-07-28 |
 | P1 未关闭缺陷 | 0 | 2026-07-28 |
@@ -721,15 +721,15 @@ RemoteDesktop/
 
 | 领域 | 已写入源码 | 尚缺的完成证据/实现 |
 |---|---|---|
-| 工程与依赖 | XcodeGen、SwiftPM、CMake/FreeRDP、Universal 2、归档/公证脚本和 macOS CI；GitHub hosted arm64/x86_64 已分别编译 FreeRDP 3.30.0；运行 `30316764662` 已通过 Xcode 15.4 Universal 2 构建、AppKit 生命周期测试、签名、依赖闭包和 artifact 上传；产物已在 macOS 11 Intel 创建主窗口 | 完成 Intel 解锁态 onscreen 复验；锁定 OpenSSL 精确版本/来源/哈希；验证全部通道插件；macOS 11 Apple Silicon 启动；Developer ID 签名与公证 |
+| 工程与依赖 | XcodeGen、SwiftPM、CMake/FreeRDP、Universal 2、归档/公证脚本和 macOS CI；GitHub hosted arm64/x86_64 已分别编译 FreeRDP 3.30.0；运行 `30325083089` 已通过 Xcode 15.4 Universal 2 构建、Swift/AppKit/renderer 测试、签名、依赖闭包和 artifact 上传；产物已在 macOS 11 Intel 创建主窗口 | 完成修复版 Intel 解锁态 onscreen 与连接复验；锁定 OpenSSL 精确版本/来源/哈希；验证全部通道插件；macOS 11 Apple Silicon 启动；Developer ID 签名与公证 |
 | 配置与凭据 | SQLite schema v1/WAL、名称/主机/标签搜索、严格 schema、流式输入大小门禁、版本化备份/恢复、数据库/WAL/SHM 批量隔离及失败回滚、导入/迁移回滚失败报告、配置删除事务、凭据唯一所有权、乐观并发、删除/更新竞态防护，三类 Keychain 隔离引用，跨存储事务串行化、临时凭据提示，以及写入/落库/旧引用清理和回滚残留报告；备份剥离全部 Keychain 引用和共享目录授权，恢复清理无引用 Keychain 项 | macOS SQLite/Keychain 测试；并发、故障注入与恢复路径人工验收 |
 | 网络代理 | Direct、SOCKS5、HTTP/HTTPS CONNECT、仅 loopback 随机端口隧道、代次化停止/失败连接回收、目标/代理/网关统一校验、SOCKS5 域名及 IPv4/IPv6 ATYP、代理端 DNS、Basic、防注入、编码前请求/凭据边界、响应上限、临时代理凭据和 15 秒路径测试；代理握手现于 FreeRDP 启动前完成并将错误返回 UI；macOS 11 上 Clash Verge `127.0.0.1:7897` 已分别以 SOCKS5/HTTP CONNECT 到达真实目标 `3389` | 通过应用完成代理 RDP 登录与首帧；PAC、本机目标 DNS 和企业代理矩阵 |
-| RDP 核心 | FreeRDP TLS/NLA、禁用旧 RDP Security、原始证书名、RD Gateway、取消、证书决策桥接及受限终态转换；macOS Universal 2 编译和 Big Sur 运行时加载已通过 | Windows/RD Gateway 实测；认证/错误码矩阵 |
+| RDP 核心 | FreeRDP TLS/NLA、禁用旧 RDP Security、原始证书名、RD Gateway、取消、证书决策桥接及受限终态转换；补齐官方客户端路径要求的静态通道 provider 一次性线程安全注册，避免 `FREERDP_ERROR_PRE_CONNECT_FAILED`；增加分阶段可读错误和新版错误码分类；macOS Universal 2 编译和 Big Sur 运行时加载已通过 | Windows/RD Gateway 实测；修复版 Direct/代理首帧；完整认证/错误码矩阵 |
 | 会话与输入 | 独立 session ID、旧回调过滤、有限退避、睡眠/网络路径处理、Metal/Core Graphics 自动回退、统一帧边界校验、256 MiB 单帧上限、仅保留最新帧、边界坐标、拖拽 MOVE、两种 Command 模式、全屏和安全序列；Objective-C++/AppKit/renderer 已编译测试 | 帧关闭竞态实测；动态分辨率更新；键盘布局与实机性能矩阵 |
 | 资源重定向 | FreeRDP 能力开关；用户选目录、安全书签、书签元数据边界和会话级授权生命周期 | 以 3.30.0 头文件完成 rdpdr 设备注册；剪贴板控制器、通道打包和音频/设备实测 |
 | 企业管理 | MDM/强制偏好解析；重连、缩放、重定向上限；禁止保存凭据；禁止私有诊断导出；设置 UI 锁定和连接前再次收敛；macOS 11 deployment target 编译已通过 | 真实 MDM 下发、移除与绕过测试；管理员签收 |
 | 诊断与安全 | 结构化路由/会话事件、私有字段哈希、敏感字段入口拒绝、诊断预览/清理/脱敏导出，以及文件、配置、凭据和帧缓冲大小门禁 | 崩溃收集策略、安全评审和 fuzz/长稳证据 |
-| 静态门禁 | Windows 仓库校验脚本已检查 UTF-8、JSON、plist、依赖固定字段、本地化键/占位符、deployment target 以及显式 AppKit delegate 安装/保活；GitHub arm64/x86_64 Swift 单元测试和 AppKit 主窗口生命周期测试已通过；Objective-C++/renderer 测试已通过；Universal 2 脚本已实际逐 Mach-O/逐架构检查 slice、签名、macOS 11 最低版本、`LC_RPATH` 和运行时依赖闭包 | 静态分析、正式签名/公证门禁、长稳和真实连接测试 |
+| 静态门禁 | Windows 仓库校验脚本已检查 UTF-8、JSON、plist、依赖固定字段、本地化键/占位符、deployment target 以及显式 AppKit delegate 安装/保活；GitHub arm64/x86_64 Swift 单元测试、AppKit 主窗口生命周期测试和设置页标题变化布局稳定性测试已通过；Objective-C++/renderer 测试已通过；Universal 2 脚本已实际逐 Mach-O/逐架构检查 slice、签名、macOS 11 最低版本、`LC_RPATH` 和运行时依赖闭包 | 静态分析、正式签名/公证门禁、长稳和真实连接测试 |
 
 ### 14.3 当前阻塞项
 
@@ -765,6 +765,8 @@ RemoteDesktop/
 | BUG-001 | P1 | 双击应用后进程存在，但没有任何界面或报错 | 无 storyboard 的程序化 AppKit 应用未显式安装并保活 `AppDelegate` | `9037bb0`、`6839085`；新增 delegate、主窗口数量与 `isVisible` 生命周期测试，并在 Windows 仓库门禁检查显式入口 | 已修复，待解锁态真机复验 |
 | BUG-002 | P1 | 保存后目标 `3389` 变成 `3`、代理 `7897` 变成 `7`，测试连接始终失败 | `NSTextField.integerValue` 对本地化分组字符串 `3,389`/`7,897` 只解析逗号前前缀 | `dbbb3cc` 改用无分组的字符串读写和纯数字严格解析；新增截断回归测试；真机数据库已备份并定向修复为 `3389`/`7897` | 已修复，CI 与数据库完整性验证通过 |
 | BUG-003 | P1 | 代理或 RDP 失败后会话窗口只有空白画面，无法判断阶段和错误 | 本地 listener 在真实代理握手前返回，后台握手错误被隧道吞掉；状态仅在紧凑工具栏显示 | `dbbb3cc` 在建立 listener 前完成代理握手并直接抛错；新增中央状态/错误/重试层和深色等待画布，仅在帧校验通过后隐藏状态层 | 已修复，待应用内 RDP 首帧验收 |
+| BUG-004 | P1 | Direct 连接持续失败并显示 `0x00020001` | 自建 `freerdp_new`/`freerdp_context_new` 路径在加载静态通道前未执行官方客户端路径的 `freerdp_register_addin_provider`，导致 PreConnect 在网络、TLS/NLA 和认证前失败 | `74d6ac4` 在 PreConnect 加载 add-ins 前线程安全注册 `freerdp_channels_load_static_addin_entry`；增加分阶段错误摘要和分类测试 | 代码与 CI 已修复，待 macOS 11 真机连接/首帧复验 |
+| BUG-005 | P2 | 设置页每次测试连接后，Network 页文字向右下角累计移动 | `NSTabViewItem` 直接承载带 `edgeInsets` 的可变尺寸 `NSStackView`，测试按钮标题变化和 sheet 关闭反复触发 tab 内容重排 | `74d6ac4` 使用稳定容器和顶部/左侧 Auto Layout 约束，固定测试按钮 alignment width；`7e7a9d9` 增加连续标题变化的 AppKit 坐标稳定性测试 | 已修复并通过 CI，待 macOS 11 真机连续点击复验 |
 
 ### 14.3.4 代理与空白会话修复证据
 
@@ -773,6 +775,14 @@ RemoteDesktop/
 - 配置修复：停止应用后用 SQLite 在线备份保存修复前数据库；仅当 profile 仍匹配 `3/7` 时定向更新为 `3389/7897`，更新数严格为 1；修复前备份和修复后数据库的 `PRAGMA integrity_check` 均为 `ok`，未读取或修改 Keychain 密码。
 - 成功构建：提交 `dbbb3cc`，GitHub Actions 运行 [30321658257](https://github.com/tantanwu/AlstarsRDP/actions/runs/30321658257) 全部通过；artifact ID `8674261915`，Actions SHA-256 `b2a93aa71d0a6067ac603337f149bb444c9d7423e962b2aae98e14686002a4a2`，内层 ZIP SHA-256 `7ba0dcf33bbeb6fff6ad3bcb867a26a3f50fd86ba8a6fed8ac0ff8eef30b5b18`。
 - 真机部署：修复版通过严格 codesign 校验并包含 x86_64/arm64；已部署到 macOS 11.7.10 Intel，主窗口创建成功。应用内 TLS/NLA 登录和首帧仍需在 GUI 中使用 Keychain 凭据触发后验收。
+
+### 14.3.5 FreeRDP 预连接与设置页布局修复证据
+
+- 错误定义：锁定的 FreeRDP 3.30.0 将 `0x00020001` 定义为 `FREERDP_ERROR_PRE_CONNECT_FAILED`；失败点早于 DNS、代理、TLS/NLA 和 Windows 凭据校验。
+- 根因与修复：`RDPSession.mm` 直接创建 FreeRDP context，未执行 `freerdp_client_context_new` 中的静态通道 provider 注册。提交 `74d6ac4` 在 `freerdp_client_load_addins` 前一次性、线程安全地注册 provider，并保留注册失败检查。
+- 布局修复：Network 页 stack 改为由稳定 `NSView` 容器承载并固定顶部/左侧位置；测试按钮使用 120 pt alignment width。回归测试连续切换四次按钮标题，断言按钮 alignment width 与页面 stack 坐标不变。
+- 自动化证据：首次运行 `30323866357` 的 Universal 2 应用编译成功，新增测试因把 AppKit frame（包含左右 alignment inset）误当 alignment rect 而失败；提交 `7e7a9d9` 修正断言。GitHub Actions 运行 [30325083089](https://github.com/tantanwu/AlstarsRDP/actions/runs/30325083089) 随后全部通过，包括双架构 Swift 测试、FreeRDP 构建、Universal 2 应用构建、AppKit/renderer 测试、ad-hoc 签名、依赖闭包、打包和仓库校验。
+- 构建产物：`AlstarsRDP-macOS11-Universal2-unsigned`，Actions artifact ID `8675411822`，Actions SHA-256 `08470ac85b9ec3db7004f042ff3f45b463b32be69c1f2657180b25f2da61ceff`。内层 ZIP 哈希、macOS 11 真机 `0x00020001` 消失、RDP 首帧和设置页连续点击仍待新产物下载安装后确认。
 
 ### 14.4 每周状态模板
 
@@ -919,6 +929,7 @@ RemoteDesktop/
 | 2026-07-27 | 0.2.5 | GitHub Actions `30288609403` 首次全绿；Universal 2 artifact 通过 macOS 11.7.10 Intel 双 slice、签名和 12 秒启动验证；关闭四个环境阻塞并完成 4 项任务 | 建立首个可复现的 macOS 11 Intel 构建与运行证据，继续 Apple Silicon、实网 RDP 和发布验收 | Codex |
 | 2026-07-28 | 0.2.6 | 撤回“进程存活即启动成功”的错误结论；修复程序化 AppKit 入口未安装 delegate 导致的无窗口问题；增加生命周期回归测试；记录 CI `30316764662`、新 artifact 和 macOS 11 Intel 主窗口证据 | 用户真机报告应用无界面；验证发现旧产物窗口数为 0，新产物已创建主窗口，待解锁态 onscreen 复验 | Codex |
 | 2026-07-28 | 0.2.7 | 修复本地化端口被截断、代理握手错误被吞和会话空白页；增加严格端口、代理准备失败、中央状态/重试和首帧显示保护；修复真机 profile 并验证真实 SOCKS5/HTTP CONNECT 路径 | 用户报告连接窗口空白且代理测试始终失败；取证确认 `3389/7897` 被保存为 `3/7`，并完成 CI #29 与真机网络验证 | Codex |
+| 2026-07-28 | 0.2.8 | 修复 FreeRDP 静态通道 provider 未注册导致的 `0x00020001`；设置页改为稳定 tab 容器并固定测试按钮 alignment width；增加错误摘要、错误码分类及布局回归测试；CI `30325083089` 全绿 | 用户报告 Direct 连接持续在 PreConnect 失败，且每次测试连接后设置页内容累计偏移；源码与 FreeRDP 固定版本取证确认两个根因 | Codex |
 
 ---
 
