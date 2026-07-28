@@ -125,11 +125,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             action: #selector(NSWindow.toggleFullScreen(_:)),
             keyEquivalent: "f"
         )
-        fullScreen.keyEquivalentModifierMask = [.control, .command]
         windowMenu.addItem(.separator())
         windowMenu.addItem(withTitle: NSLocalizedString("Bring All to Front", comment: "bring front"), action: #selector(NSApplication.arrangeInFront(_:)), keyEquivalent: "")
         windowItem.submenu = windowMenu
         NSApp.windowsMenu = windowMenu
         NSApp.mainMenu = mainMenu
+        // Assign this after installing windowsMenu because newer AppKit releases
+        // otherwise replace the standard full-screen shortcut with Function-F.
+        fullScreen.keyEquivalentModifierMask = [.control, .command]
     }
 }
