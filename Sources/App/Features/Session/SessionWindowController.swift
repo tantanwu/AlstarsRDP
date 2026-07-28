@@ -365,16 +365,30 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
 
     func session(_ session: RDPSession, didChange state: RDPNativeSessionState, errorCode: UInt32) {
         guard self.session === session else { return }
+        var fields: [String: DiagnosticValue] = [
+            "sessionID": .privateText(sessionID.uuidString),
+            "errorCode": .number(Double(errorCode))
+        ]
+        if state == .failed {
+            if !session.lastErrorName.isEmpty {
+                fields["freeRDPErrorName"] = .publicText(session.lastErrorName)
+            }
+            if !session.lastErrorDescription.isEmpty {
+                fields["freeRDPErrorDescription"] = .publicText(session.lastErrorDescription)
+            }
+            if !session.lastNativeLogDetail.isEmpty {
+                fields["nativeDetail"] = .privateText(session.lastNativeLogDetail)
+            }
+            fields["systemErrorCode"] = .number(Double(session.lastSystemErrorCode))
+            fields["socketErrorCode"] = .number(Double(session.lastSocketErrorCode))
+        }
         Task {
             await diagnostics.record(DiagnosticEvent(
                 level: state == .failed ? .error : .info,
                 category: .rdp,
                 code: "RDP_STATE_\(state.rawValue)",
                 message: Self.stateDescription(state),
-                fields: [
-                    "sessionID": .privateText(sessionID.uuidString),
-                    "errorCode": .number(Double(errorCode))
-                ]
+                fields: fields
             ))
         }
         switch state {

@@ -4,6 +4,7 @@
 #include <cstring>
 #include <limits>
 #include <mutex>
+#include <string>
 
 #include <freerdp/client.h>
 #include <freerdp/addin.h>
@@ -17,7 +18,10 @@
 #include <freerdp/settings.h>
 #include <freerdp/update.h>
 #include <winpr/crt.h>
+#include <winpr/error.h>
 #include <winpr/synch.h>
+#include <winpr/winsock.h>
+#include <winpr/wlog.h>
 
 @interface RDPCertificateInfo ()
 @property(nonatomic, readwrite, copy) NSString *host;
@@ -113,6 +117,11 @@ typedef struct {
     uint32_t _pendingFrameStride;
     bool _frameDeliveryScheduled;
 }
+@property(nonatomic, readwrite, copy) NSString *lastErrorName;
+@property(nonatomic, readwrite, copy) NSString *lastErrorDescription;
+@property(nonatomic, readwrite, copy) NSString *lastNativeLogDetail;
+@property(nonatomic, readwrite) uint32_t lastSystemErrorCode;
+@property(nonatomic, readwrite) int32_t lastSocketErrorCode;
 - (void)publishState:(RDPNativeSessionState)state errorCode:(uint32_t)errorCode;
 - (void)notifyState:(RDPNativeSessionState)state errorCode:(uint32_t)errorCode;
 - (void)clearConfigurationSecrets;
@@ -120,9 +129,41 @@ typedef struct {
 - (void)publishFrameFromContext:(RDPAppContext *)context;
 - (void)deliverPendingFrame;
 - (void)clearPendingFrame;
+- (void)captureFailureDetailsForInstance:(freerdp *)instance
+                               errorCode:(uint32_t)errorCode
+                         systemErrorCode:(uint32_t)systemErrorCode
+                         socketErrorCode:(int32_t)socketErrorCode;
 @end
 
 static constexpr size_t RDPMaxFrameBytes = 256u * 1024u * 1024u;
+static constexpr size_t RDPMaxNativeLogBytes = 4u * 1024u;
+static std::once_flag RDPNativeLogRegistration;
+static thread_local std::string RDPThreadNativeLog;
+
+static BOOL RDPNativeLogMessage(const wLogMessage *message) {
+    if (!message || message->Level < WLOG_ERROR) return TRUE;
+    const char *text = message->TextString;
+    if (!text || text[0] == '\0') text = message->FormatString;
+    if (!text || text[0] == '\0' || RDPThreadNativeLog.size() >= RDPMaxNativeLogBytes) return TRUE;
+    if (!RDPThreadNativeLog.empty()) RDPThreadNativeLog.append("\n");
+    const size_t remaining = RDPMaxNativeLogBytes - RDPThreadNativeLog.size();
+    RDPThreadNativeLog.append(text, strnlen(text, remaining));
+    return TRUE;
+}
+
+static void RDPConfigureNativeLogging(void) {
+    std::call_once(RDPNativeLogRegistration, [] {
+        wLog *root = WLog_GetRoot();
+        if (!root || !WLog_SetLogLevel(root, WLOG_ERROR) ||
+            !WLog_SetLogAppenderType(root, WLOG_APPENDER_CALLBACK)) return;
+        wLogAppender *appender = WLog_GetLogAppender(root);
+        if (!appender) return;
+        wLogCallbacks callbacks = {};
+        callbacks.message = RDPNativeLogMessage;
+        if (!WLog_ConfigureAppender(appender, "callbacks", &callbacks)) return;
+        (void)WLog_OpenAppender(root);
+    });
+}
 
 static NSString *RDPString(const char *value) {
     return value ? [NSString stringWithUTF8String:value] ?: @"" : @"";
@@ -344,6 +385,11 @@ static bool RDPStateCanTransition(RDPNativeSessionState from, RDPNativeSessionSt
         _pendingFrameHeight = 0;
         _pendingFrameStride = 0;
         _frameDeliveryScheduled = false;
+        _lastErrorName = @"";
+        _lastErrorDescription = @"";
+        _lastNativeLogDetail = @"";
+        _lastSystemErrorCode = 0;
+        _lastSocketErrorCode = 0;
     }
     return self;
 }
@@ -363,6 +409,8 @@ static bool RDPStateCanTransition(RDPNativeSessionState from, RDPNativeSessionSt
     dispatch_async(_sessionQueue, ^{
         RDPSession *strongSelf = weakSelf;
         if (!strongSelf) return;
+        RDPConfigureNativeLogging();
+        RDPThreadNativeLog.clear();
         if (strongSelf->_stopRequested.load()) {
             [strongSelf clearConfigurationSecrets];
             [strongSelf publishState:RDPNativeSessionStateClosed errorCode:0];
@@ -403,8 +451,18 @@ static bool RDPStateCanTransition(RDPNativeSessionState from, RDPNativeSessionSt
             [strongSelf clearConfigurationSecrets];
             [strongSelf publishState:RDPNativeSessionStateFailed errorCode:UINT32_MAX - 2];
         } else {
+            SetLastError(ERROR_SUCCESS);
+            WSASetLastError(0);
             const BOOL connected = freerdp_connect(instance);
             const uint32_t connectError = freerdp_get_last_error(instance->context);
+            const uint32_t systemError = GetLastError();
+            const int32_t socketError = WSAGetLastError();
+            if (!connected) {
+                [strongSelf captureFailureDetailsForInstance:instance
+                                                   errorCode:connectError
+                                             systemErrorCode:systemError
+                                             socketErrorCode:socketError];
+            }
             RDPClearSettingsSecrets(instance->context->settings);
             [strongSelf clearConfigurationSecrets];
             if (!connected) {
@@ -467,6 +525,37 @@ static bool RDPStateCanTransition(RDPNativeSessionState from, RDPNativeSessionSt
 - (void)clearConfigurationSecrets {
     _configuration.password = @"";
     _configuration.gatewayPassword = @"";
+}
+
+- (void)captureFailureDetailsForInstance:(freerdp *)instance
+                               errorCode:(uint32_t)errorCode
+                         systemErrorCode:(uint32_t)systemErrorCode
+                         socketErrorCode:(int32_t)socketErrorCode {
+    self.lastErrorName = RDPString(freerdp_get_last_error_name(errorCode));
+    self.lastErrorDescription = RDPString(freerdp_get_last_error_string(errorCode));
+    self.lastSystemErrorCode = systemErrorCode;
+    self.lastSocketErrorCode = socketErrorCode;
+
+    NSString *detail = RDPString(RDPThreadNativeLog.c_str());
+    if (instance && instance->context && instance->context->errorDescription) {
+        NSString *contextDetail = RDPString(instance->context->errorDescription);
+        if (contextDetail.length > 0 && ![detail containsString:contextDetail]) {
+            detail = detail.length > 0
+                ? [detail stringByAppendingFormat:@"\n%@", contextDetail]
+                : contextDetail;
+        }
+    }
+    for (NSString *secret in @[
+        _configuration.password ?: @"",
+        _configuration.gatewayPassword ?: @"",
+        _configuration.username ?: @"",
+        _configuration.gatewayUsername ?: @""
+    ]) {
+        if (secret.length > 0) {
+            detail = [detail stringByReplacingOccurrencesOfString:secret withString:@"[redacted]"];
+        }
+    }
+    self.lastNativeLogDetail = detail;
 }
 
 - (RDPCertificateDecision)certificateDecision:(RDPCertificateInfo *)certificate {

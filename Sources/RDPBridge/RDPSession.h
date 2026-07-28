@@ -73,6 +73,11 @@ NS_SWIFT_UI_ACTOR @protocol RDPSessionDelegate <NSObject>
 @interface RDPSession : NSObject
 @property(nonatomic, weak, nullable) id<RDPSessionDelegate> delegate;
 @property(nonatomic, readonly) RDPNativeSessionState state;
+@property(nonatomic, readonly, copy) NSString *lastErrorName;
+@property(nonatomic, readonly, copy) NSString *lastErrorDescription;
+@property(nonatomic, readonly, copy) NSString *lastNativeLogDetail;
+@property(nonatomic, readonly) uint32_t lastSystemErrorCode;
+@property(nonatomic, readonly) int32_t lastSocketErrorCode;
 
 - (instancetype)initWithConfiguration:(RDPConnectionConfiguration *)configuration NS_DESIGNATED_INITIALIZER;
 - (instancetype)init NS_UNAVAILABLE;
