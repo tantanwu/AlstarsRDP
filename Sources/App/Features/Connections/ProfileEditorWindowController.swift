@@ -121,6 +121,7 @@ final class ProfileEditorWindowController: NSWindowController {
         routePopup.addItems(withTitles: ["Direct", "SOCKS5", "HTTP CONNECT", "HTTPS CONNECT", "RD Gateway"] )
         routePopup.target = self; routePopup.action = #selector(routeChanged)
         routeTestButton.target = self; routeTestButton.action = #selector(testConnectionPath)
+        routeTestButton.widthAnchor.constraint(equalToConstant: 120).isActive = true
         tabView.addTabViewItem(tab(title: NSLocalizedString("Network", comment: "network"), rows: [
             row(NSLocalizedString("Route", comment: "route"), routePopup),
             row(NSLocalizedString("Proxy / gateway host", comment: "proxy host"), proxyHostField),
@@ -185,10 +186,18 @@ final class ProfileEditorWindowController: NSWindowController {
 
     private func tab(title: String, rows: [NSView]) -> NSTabViewItem {
         let item = NSTabViewItem(identifier: title); item.label = title
+        let container = NSView()
         let stack = NSStackView(views: rows)
         stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 10
-        stack.edgeInsets = NSEdgeInsets(top: 18, left: 18, bottom: 18, right: 18)
-        item.view = stack
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: container.topAnchor, constant: 18),
+            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 18),
+            stack.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -18),
+            stack.bottomAnchor.constraint(lessThanOrEqualTo: container.bottomAnchor, constant: -18)
+        ])
+        item.view = container
         return item
     }
 

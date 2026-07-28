@@ -88,6 +88,17 @@
 "Unknown session state" = "未知会话状态";
 "Connection cancelled" = "连接已取消";
 "Connection failed (0x%08X)" = "连接失败（0x%08X）";
+"%@\nError code: 0x%08X" = "%@\n错误代码：0x%08X";
+"The RDP client components could not be initialized." = "RDP 客户端组件初始化失败。";
+"The RDP client session could not be initialized." = "RDP 客户端会话初始化失败。";
+"The target computer name could not be resolved." = "无法解析目标计算机名称。";
+"The target computer could not be reached." = "无法连接到目标计算机。";
+"TLS or RDP security negotiation failed." = "TLS 或 RDP 安全协商失败。";
+"Windows authentication failed or the account cannot sign in remotely." = "Windows 身份认证失败，或该账户无权远程登录。";
+"The connection was cancelled." = "连接已取消。";
+"The remote desktop did not become ready in time." = "远程桌面未能及时就绪。";
+"The target computer is still starting." = "目标计算机仍在启动。";
+"The RDP connection failed." = "RDP 连接失败。";
 "Connection lost. Retry %d of %d in %.1f seconds…" = "连接已中断，第 %d/%d 次重试将在 %.1f 秒后开始…";
 "Windows credentials required" = "需要 Windows 凭据";
 "RD Gateway credentials required" = "需要 RD Gateway 凭据";

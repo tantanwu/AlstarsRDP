@@ -461,8 +461,16 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
         guard permitsAutomaticReconnect, !isClosing, disposition == .retryable,
               reconnectAttempt < profile.reconnect.maximumAttempts else {
             clearEphemeralCredentials()
+            let summary = NSLocalizedString(
+                RDPFailureClassifier.summary(for: errorCode),
+                comment: "RDP failure summary"
+            )
             showStatus(
-                String(format: NSLocalizedString("Connection failed (0x%08X)", comment: "failure code"), errorCode),
+                String(
+                    format: NSLocalizedString("%@\nError code: 0x%08X", comment: "failure summary and code"),
+                    summary,
+                    errorCode
+                ),
                 busy: false,
                 retryable: true
             )

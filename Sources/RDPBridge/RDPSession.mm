@@ -6,6 +6,8 @@
 #include <mutex>
 
 #include <freerdp/client.h>
+#include <freerdp/addin.h>
+#include <freerdp/client/channels.h>
 #include <freerdp/client/cmdline.h>
 #include <freerdp/codec/color.h>
 #include <freerdp/freerdp.h>
@@ -167,6 +169,9 @@ static BOOL RDPDesktopResize(rdpContext *context) {
                       freerdp_settings_get_uint32(context->settings, FreeRDP_DesktopHeight));
 }
 
+static std::once_flag RDPAddinProviderRegistration;
+static int RDPAddinProviderRegistrationStatus = -1;
+
 static BOOL RDPPreConnect(freerdp *instance) {
     if (!instance || !instance->context || !instance->context->settings || !instance->context->update) return FALSE;
     rdpSettings *settings = instance->context->settings;
@@ -176,6 +181,11 @@ static BOOL RDPPreConnect(freerdp *instance) {
     instance->context->update->BeginPaint = RDPBeginPaint;
     instance->context->update->EndPaint = RDPEndPaint;
     instance->context->update->DesktopResize = RDPDesktopResize;
+    std::call_once(RDPAddinProviderRegistration, [] {
+        RDPAddinProviderRegistrationStatus =
+            freerdp_register_addin_provider(freerdp_channels_load_static_addin_entry, 0);
+    });
+    if (RDPAddinProviderRegistrationStatus != CHANNEL_RC_OK) return FALSE;
     return freerdp_client_load_addins(instance->context->channels, settings);
 }
 

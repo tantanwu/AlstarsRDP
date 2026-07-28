@@ -15,16 +15,43 @@ public enum RDPFailureClassifier {
         switch errorCode {
         case 0x0002_0004 ... 0x0002_0008,
              0x0002_000C,
-             0x0002_000D:
+             0x0002_000D,
+             0x0002_001C,
+             0x0002_001D:
             return .retryable
         case 0x0002_000B:
             return .cancelled
         case 0x0002_0009,
              0x0002_000A,
-             0x0002_000E ... 0x0002_0017:
+             0x0002_000E ... 0x0002_001B:
             return .authentication
         default:
             return .terminal
+        }
+    }
+
+    public static func summary(for errorCode: UInt32) -> String {
+        switch errorCode {
+        case 0x0002_0001:
+            return "The RDP client components could not be initialized."
+        case 0x0002_0002, 0x0002_0003:
+            return "The RDP client session could not be initialized."
+        case 0x0002_0004, 0x0002_0005:
+            return "The target computer name could not be resolved."
+        case 0x0002_0006, 0x0002_0007, 0x0002_000D:
+            return "The target computer could not be reached."
+        case 0x0002_0008, 0x0002_000C:
+            return "TLS or RDP security negotiation failed."
+        case 0x0002_0009, 0x0002_000A, 0x0002_000E ... 0x0002_001B:
+            return "Windows authentication failed or the account cannot sign in remotely."
+        case 0x0002_000B:
+            return "The connection was cancelled."
+        case 0x0002_001C:
+            return "The remote desktop did not become ready in time."
+        case 0x0002_001D:
+            return "The target computer is still starting."
+        default:
+            return "The RDP connection failed."
         }
     }
 }

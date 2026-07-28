@@ -228,8 +228,30 @@ final class ConnectionProfileTests: XCTestCase {
     func testAuthenticationFailuresNeverRetry() {
         XCTAssertEqual(RDPFailureClassifier.disposition(for: 0x0002_0009), .authentication)
         XCTAssertEqual(RDPFailureClassifier.disposition(for: 0x0002_0011), .authentication)
+        XCTAssertEqual(RDPFailureClassifier.disposition(for: 0x0002_0018), .authentication)
         XCTAssertEqual(RDPFailureClassifier.disposition(for: 0x0002_000D), .retryable)
+        XCTAssertEqual(RDPFailureClassifier.disposition(for: 0x0002_001D), .retryable)
         XCTAssertEqual(RDPFailureClassifier.disposition(for: 0xDEAD_BEEF), .terminal)
+    }
+
+    func testConnectionFailureSummariesIdentifyTheFailureStage() {
+        XCTAssertEqual(
+            RDPFailureClassifier.summary(for: 0x0002_0001),
+            "The RDP client components could not be initialized."
+        )
+        XCTAssertEqual(
+            RDPFailureClassifier.summary(for: 0x0002_0005),
+            "The target computer name could not be resolved."
+        )
+        XCTAssertEqual(
+            RDPFailureClassifier.summary(for: 0x0002_0008),
+            "TLS or RDP security negotiation failed."
+        )
+        XCTAssertEqual(
+            RDPFailureClassifier.summary(for: 0x0002_0015),
+            "Windows authentication failed or the account cannot sign in remotely."
+        )
+        XCTAssertEqual(RDPFailureClassifier.summary(for: 0xDEAD_BEEF), "The RDP connection failed.")
     }
 
     func testReconnectBackoffIsBounded() {
