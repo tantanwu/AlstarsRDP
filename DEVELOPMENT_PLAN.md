@@ -1,7 +1,7 @@
 # macOS RDP 远程桌面客户端：完整开发与进度跟踪文档
 
-> 文档状态：执行中（Universal 2 CI 已通过；macOS 11 Intel 主窗口已创建，待解锁态可见性复验与 M0 实网/双平台验收）
-> 文档版本：0.2.6
+> 文档状态：执行中（macOS 11 Intel 启动、端口修复和真实 SOCKS5/HTTP CONNECT 路径已验证；待 RDP 首帧与双平台验收）
+> 文档版本：0.2.7
 > 最后更新：2026-07-28
 > 目标平台：macOS 11 Big Sur 及以上，Intel x86_64 与 Apple Silicon arm64  
 > 目标系统：支持 RDP 的 Windows Pro、Enterprise、Windows Server  
@@ -708,12 +708,12 @@ RemoteDesktop/
 | 指标 | 当前值 | 更新时间 |
 |---|---:|---|
 | 当前里程碑 | M0 技术验证与基线 | 2026-07-28 |
-| 总体状态 | 开发中（Universal 2 CI 已通过；macOS 11 Intel 已创建主窗口，待解锁态可见性复验、M0 实网和 Apple Silicon 验收） | 2026-07-28 |
+| 总体状态 | 开发中（Universal 2 CI 已通过；macOS 11 Intel 已创建主窗口并修复配置端口，真实 SOCKS5/HTTP CONNECT 路径可达；待 RDP 首帧和 Apple Silicon 验收） | 2026-07-28 |
 | 已完成任务 | 3 | 2026-07-28 |
 | P0 未关闭缺陷 | 0 | 2026-07-28 |
 | P1 未关闭缺陷 | 0 | 2026-07-28 |
 | 最大风险 | 尚无受控 Windows/RD Gateway/企业代理实验室，无法验证实际 TLS/NLA、代理、网关与重定向行为 | 2026-07-28 |
-| 下一门禁 | 在解锁的 macOS 11 Intel 桌面确认主窗口 onscreen；随后完成 Apple Silicon 启动和受控 Windows 的 Direct、SOCKS5、HTTP CONNECT、TLS/NLA 验收 | 待真机解锁及提供测试设备和实验室 |
+| 下一门禁 | 在 macOS 11 Intel 通过修复后的 `3389`/`7897` 配置完成 TLS/NLA 登录和首帧验收；随后完成 Apple Silicon 启动及其余 Windows/网关矩阵 | 待 GUI 凭据确认及提供 Apple Silicon/实验室 |
 
 ### 14.2 当前实现快照
 
@@ -723,7 +723,7 @@ RemoteDesktop/
 |---|---|---|
 | 工程与依赖 | XcodeGen、SwiftPM、CMake/FreeRDP、Universal 2、归档/公证脚本和 macOS CI；GitHub hosted arm64/x86_64 已分别编译 FreeRDP 3.30.0；运行 `30316764662` 已通过 Xcode 15.4 Universal 2 构建、AppKit 生命周期测试、签名、依赖闭包和 artifact 上传；产物已在 macOS 11 Intel 创建主窗口 | 完成 Intel 解锁态 onscreen 复验；锁定 OpenSSL 精确版本/来源/哈希；验证全部通道插件；macOS 11 Apple Silicon 启动；Developer ID 签名与公证 |
 | 配置与凭据 | SQLite schema v1/WAL、名称/主机/标签搜索、严格 schema、流式输入大小门禁、版本化备份/恢复、数据库/WAL/SHM 批量隔离及失败回滚、导入/迁移回滚失败报告、配置删除事务、凭据唯一所有权、乐观并发、删除/更新竞态防护，三类 Keychain 隔离引用，跨存储事务串行化、临时凭据提示，以及写入/落库/旧引用清理和回滚残留报告；备份剥离全部 Keychain 引用和共享目录授权，恢复清理无引用 Keychain 项 | macOS SQLite/Keychain 测试；并发、故障注入与恢复路径人工验收 |
-| 网络代理 | Direct、SOCKS5、HTTP/HTTPS CONNECT、仅 loopback 随机端口隧道、代次化停止/失败连接回收、目标/代理/网关统一校验、SOCKS5 域名及 IPv4/IPv6 ATYP、代理端 DNS、Basic、防注入、编码前请求/凭据边界、响应上限、临时代理凭据和 15 秒路径测试；未实现的本机目标 DNS 模式当前明确拒绝 | 真实代理集成测试；PAC、本机目标 DNS 和企业代理矩阵 |
+| 网络代理 | Direct、SOCKS5、HTTP/HTTPS CONNECT、仅 loopback 随机端口隧道、代次化停止/失败连接回收、目标/代理/网关统一校验、SOCKS5 域名及 IPv4/IPv6 ATYP、代理端 DNS、Basic、防注入、编码前请求/凭据边界、响应上限、临时代理凭据和 15 秒路径测试；代理握手现于 FreeRDP 启动前完成并将错误返回 UI；macOS 11 上 Clash Verge `127.0.0.1:7897` 已分别以 SOCKS5/HTTP CONNECT 到达真实目标 `3389` | 通过应用完成代理 RDP 登录与首帧；PAC、本机目标 DNS 和企业代理矩阵 |
 | RDP 核心 | FreeRDP TLS/NLA、禁用旧 RDP Security、原始证书名、RD Gateway、取消、证书决策桥接及受限终态转换；macOS Universal 2 编译和 Big Sur 运行时加载已通过 | Windows/RD Gateway 实测；认证/错误码矩阵 |
 | 会话与输入 | 独立 session ID、旧回调过滤、有限退避、睡眠/网络路径处理、Metal/Core Graphics 自动回退、统一帧边界校验、256 MiB 单帧上限、仅保留最新帧、边界坐标、拖拽 MOVE、两种 Command 模式、全屏和安全序列；Objective-C++/AppKit/renderer 已编译测试 | 帧关闭竞态实测；动态分辨率更新；键盘布局与实机性能矩阵 |
 | 资源重定向 | FreeRDP 能力开关；用户选目录、安全书签、书签元数据边界和会话级授权生命周期 | 以 3.30.0 头文件完成 rdpdr 设备注册；剪贴板控制器、通道打包和音频/设备实测 |
@@ -763,6 +763,16 @@ RemoteDesktop/
 | ID | 等级 | 现象 | 根因 | 修复与回归保护 | 状态 |
 |---|---:|---|---|---|---|
 | BUG-001 | P1 | 双击应用后进程存在，但没有任何界面或报错 | 无 storyboard 的程序化 AppKit 应用未显式安装并保活 `AppDelegate` | `9037bb0`、`6839085`；新增 delegate、主窗口数量与 `isVisible` 生命周期测试，并在 Windows 仓库门禁检查显式入口 | 已修复，待解锁态真机复验 |
+| BUG-002 | P1 | 保存后目标 `3389` 变成 `3`、代理 `7897` 变成 `7`，测试连接始终失败 | `NSTextField.integerValue` 对本地化分组字符串 `3,389`/`7,897` 只解析逗号前前缀 | `dbbb3cc` 改用无分组的字符串读写和纯数字严格解析；新增截断回归测试；真机数据库已备份并定向修复为 `3389`/`7897` | 已修复，CI 与数据库完整性验证通过 |
+| BUG-003 | P1 | 代理或 RDP 失败后会话窗口只有空白画面，无法判断阶段和错误 | 本地 listener 在真实代理握手前返回，后台握手错误被隧道吞掉；状态仅在紧凑工具栏显示 | `dbbb3cc` 在建立 listener 前完成代理握手并直接抛错；新增中央状态/错误/重试层和深色等待画布，仅在帧校验通过后隐藏状态层 | 已修复，待应用内 RDP 首帧验收 |
+
+### 14.3.4 代理与空白会话修复证据
+
+- 配置取证：真机 profile 保存为目标端口 `3`、SOCKS5 `127.0.0.1:7`；两端口均不可达，而同一目标 `3389` 可达。
+- 代理取证：Clash Verge 生效配置为 mixed port `7897`；SOCKS5 和 HTTP CONNECT 均已从该端口到达真实 Windows 目标 `3389`。控制端口 `33331` 不是代理入口。
+- 配置修复：停止应用后用 SQLite 在线备份保存修复前数据库；仅当 profile 仍匹配 `3/7` 时定向更新为 `3389/7897`，更新数严格为 1；修复前备份和修复后数据库的 `PRAGMA integrity_check` 均为 `ok`，未读取或修改 Keychain 密码。
+- 成功构建：提交 `dbbb3cc`，GitHub Actions 运行 [30321658257](https://github.com/tantanwu/AlstarsRDP/actions/runs/30321658257) 全部通过；artifact ID `8674261915`，Actions SHA-256 `b2a93aa71d0a6067ac603337f149bb444c9d7423e962b2aae98e14686002a4a2`，内层 ZIP SHA-256 `7ba0dcf33bbeb6fff6ad3bcb867a26a3f50fd86ba8a6fed8ac0ff8eef30b5b18`。
+- 真机部署：修复版通过严格 codesign 校验并包含 x86_64/arm64；已部署到 macOS 11.7.10 Intel，主窗口创建成功。应用内 TLS/NLA 登录和首帧仍需在 GUI 中使用 Keychain 凭据触发后验收。
 
 ### 14.4 每周状态模板
 
@@ -908,6 +918,7 @@ RemoteDesktop/
 | 2026-07-27 | 0.2.4 | 公开 GitHub 仓库并持续修复首次 macOS CI 中的 FreeRDP 头文件、Swift 并发、framework 元数据、Universal 2 依赖解析和签名问题 | 以真实 runner 结果逐项收敛构建问题，尚未完成首次全绿 | Codex |
 | 2026-07-27 | 0.2.5 | GitHub Actions `30288609403` 首次全绿；Universal 2 artifact 通过 macOS 11.7.10 Intel 双 slice、签名和 12 秒启动验证；关闭四个环境阻塞并完成 4 项任务 | 建立首个可复现的 macOS 11 Intel 构建与运行证据，继续 Apple Silicon、实网 RDP 和发布验收 | Codex |
 | 2026-07-28 | 0.2.6 | 撤回“进程存活即启动成功”的错误结论；修复程序化 AppKit 入口未安装 delegate 导致的无窗口问题；增加生命周期回归测试；记录 CI `30316764662`、新 artifact 和 macOS 11 Intel 主窗口证据 | 用户真机报告应用无界面；验证发现旧产物窗口数为 0，新产物已创建主窗口，待解锁态 onscreen 复验 | Codex |
+| 2026-07-28 | 0.2.7 | 修复本地化端口被截断、代理握手错误被吞和会话空白页；增加严格端口、代理准备失败、中央状态/重试和首帧显示保护；修复真机 profile 并验证真实 SOCKS5/HTTP CONNECT 路径 | 用户报告连接窗口空白且代理测试始终失败；取证确认 `3389/7897` 被保存为 `3/7`，并完成 CI #29 与真机网络验证 | Codex |
 
 ---
 
