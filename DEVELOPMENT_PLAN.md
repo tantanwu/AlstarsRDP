@@ -1,8 +1,8 @@
 # macOS RDP 远程桌面客户端：完整开发与进度跟踪文档
 
-> 文档状态：执行中（Universal 2 CI 与 macOS 11 Intel 启动已通过，继续 M0 实网与双平台验收）
-> 文档版本：0.2.5
-> 最后更新：2026-07-27  
+> 文档状态：执行中（Universal 2 CI 已通过；macOS 11 Intel 主窗口已创建，待解锁态可见性复验与 M0 实网/双平台验收）
+> 文档版本：0.2.6
+> 最后更新：2026-07-28
 > 目标平台：macOS 11 Big Sur 及以上，Intel x86_64 与 Apple Silicon arm64  
 > 目标系统：支持 RDP 的 Windows Pro、Enterprise、Windows Server  
 > 维护方式：需求、里程碑、风险和决策均在本文档中持续更新
@@ -614,7 +614,7 @@ RemoteDesktop/
 ### 13.1 M0：技术验证与基线
 
 - [~] `M0-01` 已锁定 FreeRDP 3.30.0/commit，许可证已记录，CI 双架构编译和 macOS 11 运行时加载已通过；CVE 审查和 Windows 连接验证未完成。
-- [x] `M0-02` GitHub Actions 已构建 x86_64 slice，产物已在 macOS 11.7.10 Intel 实机启动并稳定运行。
+- [~] `M0-02` GitHub Actions 已构建 x86_64 slice；修复后的产物已在 macOS 11.7.10 Intel 实机启动并创建 `900x608` 主窗口。验证机当前锁屏，窗口服务器的解锁态 onscreen 复验尚未完成。
 - [~] `M0-03` arm64 Swift 测试、FreeRDP 编译及 Universal 2 slice 已通过；待 macOS 11 Apple Silicon 实机启动。
 - [x] `M0-04` 已合成 Universal 2，并在 CI 和 macOS 11 Intel 实机验证应用内全部 12 个 Mach-O 文件同时包含 arm64/x86_64 slice。
 - [ ] `M0-05` 连接 Windows 10/11 和 Server，验证 TLS/NLA。
@@ -635,7 +635,7 @@ RemoteDesktop/
 - [~] `M1-05` 连接模型、SQLite schema v1、WAL、迁移框架、配置大小门禁、回滚失败报告、三文件隔离恢复事务及删除事务已编写并通过自动化测试；损坏恢复人工验收未完成。
 - [~] `M1-06` Keychain 隔离引用、临时凭据、两阶段写入、删除后清理及回滚残留错误报告已编写，待 macOS Keychain 故障注入测试。
 - [~] `M1-07` 结构化诊断、错误分类、敏感字段脱敏及私有字段导出限制测试已编写并通过自动化测试，待隐私评审。
-- [x] `M1-08` GitHub Actions 双架构 CI 已建立并在运行 `30288609403` 全部通过：arm64/x86_64 各 94 项 Swift 测试、FreeRDP 双架构编译、AppKit/renderer 测试、Universal 2 构建、签名和依赖闭包门禁均成功。
+- [x] `M1-08` GitHub Actions 双架构 CI 已建立；运行 `30316764662` 全部通过：arm64/x86_64 Swift 测试、FreeRDP 双架构编译、AppKit 生命周期与 renderer 测试、Universal 2 构建、签名和依赖闭包门禁均成功。
 - [~] `M1-09` 已记录线程隔离临时 ADR；XPC 原型和最终决策未完成。
 
 ### 13.3 M2：核心远程桌面
@@ -707,13 +707,13 @@ RemoteDesktop/
 
 | 指标 | 当前值 | 更新时间 |
 |---|---:|---|
-| 当前里程碑 | M0 技术验证与基线 | 2026-07-27 |
-| 总体状态 | 开发中（Universal 2 CI 与 macOS 11 Intel 启动已通过，M0 实网和 Apple Silicon 验收待完成） | 2026-07-27 |
-| 已完成任务 | 4 | 2026-07-27 |
-| P0 未关闭缺陷 | 0 | 2026-07-27 |
-| P1 未关闭缺陷 | 0 | 2026-07-27 |
-| 最大风险 | 尚无受控 Windows/RD Gateway/企业代理实验室，无法验证实际 TLS/NLA、代理、网关与重定向行为 | 2026-07-27 |
-| 下一门禁 | 完成 macOS 11 Apple Silicon 启动，并在受控 Windows 目标上执行 Direct、SOCKS5、HTTP CONNECT 与 TLS/NLA 验收 | 待提供测试设备和实验室 |
+| 当前里程碑 | M0 技术验证与基线 | 2026-07-28 |
+| 总体状态 | 开发中（Universal 2 CI 已通过；macOS 11 Intel 已创建主窗口，待解锁态可见性复验、M0 实网和 Apple Silicon 验收） | 2026-07-28 |
+| 已完成任务 | 3 | 2026-07-28 |
+| P0 未关闭缺陷 | 0 | 2026-07-28 |
+| P1 未关闭缺陷 | 0 | 2026-07-28 |
+| 最大风险 | 尚无受控 Windows/RD Gateway/企业代理实验室，无法验证实际 TLS/NLA、代理、网关与重定向行为 | 2026-07-28 |
+| 下一门禁 | 在解锁的 macOS 11 Intel 桌面确认主窗口 onscreen；随后完成 Apple Silicon 启动和受控 Windows 的 Direct、SOCKS5、HTTP CONNECT、TLS/NLA 验收 | 待真机解锁及提供测试设备和实验室 |
 
 ### 14.2 当前实现快照
 
@@ -721,7 +721,7 @@ RemoteDesktop/
 
 | 领域 | 已写入源码 | 尚缺的完成证据/实现 |
 |---|---|---|
-| 工程与依赖 | XcodeGen、SwiftPM、CMake/FreeRDP、Universal 2、归档/公证脚本和 macOS CI；GitHub hosted arm64/x86_64 已分别编译 FreeRDP 3.30.0；运行 `30288609403` 已通过 Xcode 15.4 Universal 2 构建、签名、依赖闭包和 artifact 上传；产物已在 macOS 11 Intel 启动 | 锁定 OpenSSL 精确版本/来源/哈希；验证全部通道插件；macOS 11 Apple Silicon 启动；Developer ID 签名与公证 |
+| 工程与依赖 | XcodeGen、SwiftPM、CMake/FreeRDP、Universal 2、归档/公证脚本和 macOS CI；GitHub hosted arm64/x86_64 已分别编译 FreeRDP 3.30.0；运行 `30316764662` 已通过 Xcode 15.4 Universal 2 构建、AppKit 生命周期测试、签名、依赖闭包和 artifact 上传；产物已在 macOS 11 Intel 创建主窗口 | 完成 Intel 解锁态 onscreen 复验；锁定 OpenSSL 精确版本/来源/哈希；验证全部通道插件；macOS 11 Apple Silicon 启动；Developer ID 签名与公证 |
 | 配置与凭据 | SQLite schema v1/WAL、名称/主机/标签搜索、严格 schema、流式输入大小门禁、版本化备份/恢复、数据库/WAL/SHM 批量隔离及失败回滚、导入/迁移回滚失败报告、配置删除事务、凭据唯一所有权、乐观并发、删除/更新竞态防护，三类 Keychain 隔离引用，跨存储事务串行化、临时凭据提示，以及写入/落库/旧引用清理和回滚残留报告；备份剥离全部 Keychain 引用和共享目录授权，恢复清理无引用 Keychain 项 | macOS SQLite/Keychain 测试；并发、故障注入与恢复路径人工验收 |
 | 网络代理 | Direct、SOCKS5、HTTP/HTTPS CONNECT、仅 loopback 随机端口隧道、代次化停止/失败连接回收、目标/代理/网关统一校验、SOCKS5 域名及 IPv4/IPv6 ATYP、代理端 DNS、Basic、防注入、编码前请求/凭据边界、响应上限、临时代理凭据和 15 秒路径测试；未实现的本机目标 DNS 模式当前明确拒绝 | 真实代理集成测试；PAC、本机目标 DNS 和企业代理矩阵 |
 | RDP 核心 | FreeRDP TLS/NLA、禁用旧 RDP Security、原始证书名、RD Gateway、取消、证书决策桥接及受限终态转换；macOS Universal 2 编译和 Big Sur 运行时加载已通过 | Windows/RD Gateway 实测；认证/错误码矩阵 |
@@ -729,7 +729,7 @@ RemoteDesktop/
 | 资源重定向 | FreeRDP 能力开关；用户选目录、安全书签、书签元数据边界和会话级授权生命周期 | 以 3.30.0 头文件完成 rdpdr 设备注册；剪贴板控制器、通道打包和音频/设备实测 |
 | 企业管理 | MDM/强制偏好解析；重连、缩放、重定向上限；禁止保存凭据；禁止私有诊断导出；设置 UI 锁定和连接前再次收敛；macOS 11 deployment target 编译已通过 | 真实 MDM 下发、移除与绕过测试；管理员签收 |
 | 诊断与安全 | 结构化路由/会话事件、私有字段哈希、敏感字段入口拒绝、诊断预览/清理/脱敏导出，以及文件、配置、凭据和帧缓冲大小门禁 | 崩溃收集策略、安全评审和 fuzz/长稳证据 |
-| 静态门禁 | Windows 仓库校验脚本已检查 UTF-8、JSON、plist、依赖固定字段、本地化键/占位符和 deployment target；GitHub arm64/x86_64 已分别通过 94 项 Swift 单元测试；Objective-C++/AppKit/renderer 测试已通过；Universal 2 脚本已实际逐 Mach-O/逐架构检查 slice、签名、macOS 11 最低版本、`LC_RPATH` 和运行时依赖闭包 | 静态分析、正式签名/公证门禁、长稳和真实连接测试 |
+| 静态门禁 | Windows 仓库校验脚本已检查 UTF-8、JSON、plist、依赖固定字段、本地化键/占位符、deployment target 以及显式 AppKit delegate 安装/保活；GitHub arm64/x86_64 Swift 单元测试和 AppKit 主窗口生命周期测试已通过；Objective-C++/renderer 测试已通过；Universal 2 脚本已实际逐 Mach-O/逐架构检查 slice、签名、macOS 11 最低版本、`LC_RPATH` 和运行时依赖闭包 | 静态分析、正式签名/公证门禁、长稳和真实连接测试 |
 
 ### 14.3 当前阻塞项
 
@@ -744,17 +744,25 @@ RemoteDesktop/
 
 | ID | 解除证据 | 解除日期 |
 |---|---|---|
-| BLOCK-001 | 已启用 macOS GitHub Actions，并使用 macOS 11.7.10 Intel 实机完成 artifact 启动验证 | 2026-07-27 |
+| BLOCK-001 | 已启用 macOS GitHub Actions，并可在 macOS 11.7.10 Intel 实机执行 artifact；启动可见性是否通过由 `M0-02` 单独跟踪 | 2026-07-27 |
 | BLOCK-002 | CI 已下载并在 arm64/x86_64 runner 上编译 FreeRDP 3.30.0 | 2026-07-27 |
 | BLOCK-005 | 公开仓库及 CI 已能访问 GitHub/上游；OpenSSL 的精确供应链锁定继续由 `BLOCK-003` 跟踪 | 2026-07-27 |
 | BLOCK-007 | 仓库已改为公开，[macOS #24](https://github.com/tantanwu/AlstarsRDP/actions/runs/30288609403) 全部成功 | 2026-07-27 |
 
 ### 14.3.2 构建与实机证据
 
-- 成功提交：`d9348c2`；GitHub Actions 运行：[30288609403](https://github.com/tantanwu/AlstarsRDP/actions/runs/30288609403)。
-- 自动化结果：arm64/x86_64 各 94 项 Swift 测试通过，FreeRDP 3.30.0 双架构编译通过，AppKit/renderer 测试通过，Universal 2 签名与依赖闭包校验通过。
-- artifact：`AlstarsRDP-macOS11-Universal2-unsigned`，Actions SHA-256 `259ca089c922948f4afd1744ae10e254b2b993f6ea069c3ff62c4daf861e79bf`。
-- 实机：macOS 11.7.10 Intel x86_64；`LSMinimumSystemVersion=11.0`；12 个 Mach-O 文件均含 arm64/x86_64；`codesign --verify --deep --strict` 通过；应用启动后稳定运行 12 秒。
+- 回归基线：提交 `d9348c2`、运行 [30288609403](https://github.com/tantanwu/AlstarsRDP/actions/runs/30288609403) 的产物可保持进程运行 12 秒，但 Quartz 验证为 `windows=[]`。该结果不能证明应用成功启动，原 0.2.5 结论已撤回。
+- 根因：项目没有 storyboard/MainMenu.xib，却直接在 `AppDelegate` 上使用 `@main`；`NSApplicationMain` 进入事件循环后未实例化并安装 delegate，`applicationDidFinishLaunching` 没有执行。
+- 修复：提交 `9037bb0` 增加显式 AppKit 入口，安装并保活 `AppDelegate`，显式展示主窗口并处理 Dock reopen；提交 `6839085` 修复 Swift 6 主 actor 测试隔离。
+- 成功构建：GitHub Actions 运行 [30316764662](https://github.com/tantanwu/AlstarsRDP/actions/runs/30316764662) 全部通过，包含 AppKit delegate/主窗口生命周期断言、Universal 2 构建、ad-hoc 签名和依赖闭包门禁。
+- 修复产物：`AlstarsRDP-macOS11-Universal2-unsigned`，Actions artifact ID `8672486175`，Actions SHA-256 `7a4516faa5a628525197177eba809717c94b41bae51a8ddbca21a1dc8f00b7fa`；内层 ZIP SHA-256 `ad9fa252d68a5a336aed70b957bcefd995e99dad3f7e7d85281b020e8267d2e0`。
+- macOS 11.7.10 Intel 实机：`codesign --verify --deep --strict` 通过，主程序同时包含 x86_64/arm64，LaunchServices 重新注册后可正常启动；Quartz 检测到一个 layer 0、alpha 1.0、`900x608` 主窗口。验证时桌面处于锁屏状态，前台为 `loginwindow`，因此 `kCGWindowIsOnscreen=false`；解锁态 onscreen 证据仍待补齐。
+
+### 14.3.3 已修复启动缺陷
+
+| ID | 等级 | 现象 | 根因 | 修复与回归保护 | 状态 |
+|---|---:|---|---|---|---|
+| BUG-001 | P1 | 双击应用后进程存在，但没有任何界面或报错 | 无 storyboard 的程序化 AppKit 应用未显式安装并保活 `AppDelegate` | `9037bb0`、`6839085`；新增 delegate、主窗口数量与 `isVisible` 生命周期测试，并在 Windows 仓库门禁检查显式入口 | 已修复，待解锁态真机复验 |
 
 ### 14.4 每周状态模板
 
@@ -899,6 +907,7 @@ RemoteDesktop/
 | 2026-07-27 | 0.2.3 | 完成 Windows 全仓静态审计；增加标签搜索、配置/凭据唯一所有权、乐观并发和跨存储事务串行化；修复删除/更新、并发回滚、时间戳回退和恢复后 Keychain 残留；备份清除全部凭据引用；强化 `.rdp` 敏感键、HTTP CONNECT、文件面板兼容和逐架构 Universal 2 依赖闭包门禁；新增审计报告与测试 | 修复可由当前源码确认的问题并建立 Mac 首次构建/实机验收清单；已完成任务仍为 0 | Codex |
 | 2026-07-27 | 0.2.4 | 公开 GitHub 仓库并持续修复首次 macOS CI 中的 FreeRDP 头文件、Swift 并发、framework 元数据、Universal 2 依赖解析和签名问题 | 以真实 runner 结果逐项收敛构建问题，尚未完成首次全绿 | Codex |
 | 2026-07-27 | 0.2.5 | GitHub Actions `30288609403` 首次全绿；Universal 2 artifact 通过 macOS 11.7.10 Intel 双 slice、签名和 12 秒启动验证；关闭四个环境阻塞并完成 4 项任务 | 建立首个可复现的 macOS 11 Intel 构建与运行证据，继续 Apple Silicon、实网 RDP 和发布验收 | Codex |
+| 2026-07-28 | 0.2.6 | 撤回“进程存活即启动成功”的错误结论；修复程序化 AppKit 入口未安装 delegate 导致的无窗口问题；增加生命周期回归测试；记录 CI `30316764662`、新 artifact 和 macOS 11 Intel 主窗口证据 | 用户真机报告应用无界面；验证发现旧产物窗口数为 0，新产物已创建主窗口，待解锁态 onscreen 复验 | Codex |
 
 ---
 
