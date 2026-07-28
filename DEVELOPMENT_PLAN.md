@@ -768,7 +768,7 @@ RemoteDesktop/
 | BUG-004 | P1 | Direct 连接持续失败并显示 `0x00020001` | 自建 `freerdp_new`/`freerdp_context_new` 路径在加载静态通道前未执行官方客户端路径的 `freerdp_register_addin_provider`，导致 PreConnect 在网络、TLS/NLA 和认证前失败 | `74d6ac4` 在 PreConnect 加载 add-ins 前线程安全注册 `freerdp_channels_load_static_addin_entry`；增加分阶段错误摘要和分类测试 | 代码与 CI 已修复，待 macOS 11 真机连接/首帧复验 |
 | BUG-005 | P2 | 设置页每次测试连接后，Network 页文字向右下角累计移动 | `NSTabViewItem` 直接承载带 `edgeInsets` 的可变尺寸 `NSStackView`，测试按钮标题变化和 sheet 关闭反复触发 tab 内容重排 | `74d6ac4` 使用稳定容器和顶部/左侧 Auto Layout 约束，固定测试按钮 alignment width；`7e7a9d9` 增加连续标题变化的 AppKit 坐标稳定性测试 | 已修复并通过 CI，待 macOS 11 真机连续点击复验 |
 | BUG-006 | P1 | 连接真实 Windows 目标时持续显示 `0x0002000D` | 静态 OpenSSL 3 构建未携带 legacy provider；NLA/NTLM 初始化 MD4 时失败并返回 `SEC_E_NO_CREDENTIALS`，外层再覆盖为通用连接错误 | `848396c` 构建 WinPR 内置 MD4/RC4；CI `30332296837` 双架构通过；macOS 11 Intel 已完成 Direct TLS/NLA 并显示真实首帧 | 已修复并完成 Direct 真机验收 |
-| BUG-007 | P1 | 路径测试成功，但通过 SOCKS5/HTTP CONNECT 启动完整 RDP 会话仍失败 | 第一根因是 loopback 地址污染 NLA/SPN 身份；修复后真机原生日志进一步定位到第二根因：`newConnectionHandler` 在 accepted `NWConnection` 启动并进入 `.ready` 前立即取消 listener，导致 FreeRDP 对 loopback 的非阻塞 connect 被提前拆除 | 保持 `ServerHostname=127.0.0.1`、原始主机写入 `UserSpecifiedServerName`/`CertificateName`；listener 延长到首个 downstream socket 达到 `.ready` 后再取消；增加身份映射、真实 TCP 双向 relay、单连接和停止/重启回归测试 | 身份修复 CI 已通过；listener 修复已编码，待新 CI 与两种代理首帧验收 |
+| BUG-007 | P1 | 路径测试成功，但通过 SOCKS5/HTTP CONNECT 启动完整 RDP 会话仍失败 | 第一根因是 loopback 地址污染 NLA/SPN 身份；修复后真机原生日志进一步定位到第二根因：`newConnectionHandler` 在 accepted `NWConnection` 启动并进入 `.ready` 前立即取消 listener，导致 FreeRDP 对 loopback 的非阻塞 connect 被提前拆除 | 保持 `ServerHostname=127.0.0.1`、原始主机写入 `UserSpecifiedServerName`/`CertificateName`；listener 延长到首个 downstream socket 达到 `.ready` 后再取消；增加身份映射、真实 TCP 双向 relay、单连接和停止/重启回归测试 | 两层修复均已通过双架构 CI 并部署 macOS 11；完整 SOCKS5/HTTP CONNECT 首帧待 Keychain 人工授权后验收 |
 | BUG-008 | P1 | 修改分辨率后无法保存，重新打开仍为旧值 | 宽高继续使用 `NSTextField.integerValue` 和 clamping 转换，未采用端口修复后的严格无分组字符串路径 | 加载使用无分组十进制字符串；保存严格拒绝分组、小数、负数、空值、越界和超像素上限输入；增加解析回归测试 | 已修复；CI 通过，macOS 11 真机保存、关闭并重开编辑器验证通过 |
 | BUG-009 | P2 | 打开设置或连接时，Keychain 授权查询可能阻塞 AppKit 主线程 | 同步 `SecItemCopyMatching` 从主 actor 调用 | 通过 `Task.detached` 后台读取，主线程仅消费结果；增加线程回归测试 | 已修复；双架构 CI 与 macOS 11 后台线程测试通过 |
 
@@ -805,8 +805,10 @@ RemoteDesktop/
 - 自动化与产物：提交 `15b6239` 的 GitHub Actions `30340814145` 全绿，包含双架构 Swift、FreeRDP、Universal 2、AppKit/Objective-C++、Keychain 后台线程测试；artifact ID `8681011299`，Actions SHA-256 `1b5be4d43d42e9cb514f57fabae4058c8eb8cde2eae39300b175c54247c6ea33`，内层 ZIP SHA-256 `251c67e83df18b52ee59d6fa6c99ac409d55fcfcafcb11879ca42d51c0751a4a`。
 - 真机持久化验收：产物在 macOS 11.7.10 Intel 通过严格 codesign、x86_64/arm64 和最低系统 11.0 检查；分辨率由 `1920x1080` 改为 `1600x900`，保存、关闭编辑器并重开后保持不变，随后已恢复原值 `1920x1080` 并由数据库确认。BUG-008 完成。
 - 代理第二根因：SOCKS5 握手成功后，完整 RDP 仍在本机 `127.0.0.1` 随机端口的 TCP 接入阶段失败；桥接层脱敏日志记录 `Couldn't get socket ip address`、`ConnectLayer 127.0.0.1:<port> failed`，失败早于 TLS/NLA。代码审计确认 `LoopbackTunnel.accept` 在 downstream `start`/`.ready` 前调用 `listener.cancel()`。
-- listener 修复：首个 downstream 被认领后继续拒绝其他连接，但保留 listener 直到该 socket 达到 `.ready`；正常、失败、任务取消和竞争路径均取消 listener 并回收上下游连接。新增真实本地 TCP 回显集成测试覆盖 prefetched data、双向转发、单连接约束以及 stop 后重新启动。
-- 待验收：listener 修复的双架构 CI；macOS 11 Intel 上 SOCKS5、HTTP CONNECT 与 Direct 完整 RDP 首帧；连续代理路径测试布局不漂移。
+- listener 修复：提交 `34ab7df` 将首个 downstream 被认领后的 listener 保留到该 socket 达到 `.ready`，同时继续拒绝其他连接；正常、失败、任务取消和竞争路径均取消 listener 并回收上下游连接。新增真实本地 TCP 回显集成测试覆盖 prefetched data、双向转发、单连接约束以及 stop 后重新启动。提交 `9f0bbda` 为 Network.framework 的拒绝连接自动重试增加测试取消边界，避免负向断言无限等待。
+- listener 自动化证据：GitHub Actions [30344220649](https://github.com/tantanwu/AlstarsRDP/actions/runs/30344220649) 全绿，新增真实 socket relay 测试在 arm64/x86_64 均通过；artifact ID `8682348091`，官方 Actions SHA-256 `194c222fea1161d23c9f3cd9a8d79c7dcee07d1a43d339a38fc2ce51c1ecfc76`，内层 ZIP SHA-256 `a81895320438a298a3f6ce07b9e1386e1e8ffc229adc53d683a8750b0874821c`。
+- listener 真机部署：新产物部署到 `/Users/jerry/AlstarsRDP-validation/run-30344220649/unpacked/RemoteDesktop.app`，通过严格 codesign、x86_64/arm64 和最低系统 11.0 检查；应用启动、现有 SOCKS5 profile 加载和会话窗口创建成功。完整首帧当前停在 macOS SecurityAgent 对目标 Keychain 项的人工授权，不读取或代填登录密码。
+- 待验收：macOS 11 Intel 上 SOCKS5、HTTP CONNECT 与 Direct 完整 RDP 首帧；连续代理路径测试布局不漂移。
 
 ### 14.4 每周状态模板
 
