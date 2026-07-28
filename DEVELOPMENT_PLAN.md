@@ -708,7 +708,7 @@ RemoteDesktop/
 | 指标 | 当前值 | 更新时间 |
 |---|---:|---|
 | 当前里程碑 | M0 技术验证与基线 | 2026-07-29 |
-| 总体状态 | 开发中（Universal 2 CI 与 macOS 11 Intel 的 Direct、SOCKS5 真实首帧已通过；全屏悬浮工具栏、macOS 11 图标兼容及 Display Control 显式启用修复待新 CI 和真机验收） | 2026-07-29 |
+| 总体状态 | 开发中（Universal 2 CI 与 macOS 11 Intel 的 Direct、SOCKS5 真实首帧已通过；全屏悬浮工具栏、macOS 11 图标兼容及 Display Control 显式启用已通过新 CI 和真机启动，等待真实会话交互验收） | 2026-07-29 |
 | 已完成任务 | 3 | 2026-07-28 |
 | P0 未关闭缺陷 | 0 | 2026-07-28 |
 | P1 未关闭缺陷 | 3 | 2026-07-29 |
@@ -772,7 +772,7 @@ RemoteDesktop/
 | BUG-008 | P1 | 修改分辨率后无法保存，重新打开仍为旧值 | 宽高继续使用 `NSTextField.integerValue` 和 clamping 转换，未采用端口修复后的严格无分组字符串路径 | 加载使用无分组十进制字符串；保存严格拒绝分组、小数、负数、空值、越界和超像素上限输入；增加解析回归测试 | 已修复；CI 通过，macOS 11 真机保存、关闭并重开编辑器验证通过 |
 | BUG-009 | P2 | 打开设置或连接时，Keychain 授权查询可能阻塞 AppKit 主线程 | 同步 `SecItemCopyMatching` 从主 actor 调用 | 通过 `Task.detached` 后台读取，主线程仅消费结果；增加线程回归测试 | 已修复；双架构 CI 与 macOS 11 后台线程测试通过 |
 | BUG-010 | P1 | 分辨率设置不直观，远程窗口不能进入全屏，“动态分辨率”不会随本地窗口变化 | 配置只在连接前设置 `DynamicResolutionUpdate` 布尔值，没有接入 Display Control 通道、发送 Monitor Layout 更新或监听窗口事件；创建窗口时错误地预置 `.fullScreen` 状态位，且没有标准全屏菜单行为 | 接入 RDPEDISP Display Control；按画布 backing pixels、DPI 和协议边界计算尺寸，拖动去抖并在屏幕/全屏变化后立即同步；改用 `.fullScreenPrimary` 和标准快捷键；显示设置增加常用分辨率与“跟随窗口”模式 | 代码、双架构 CI、Universal 2 产物和 macOS 11 启动验证已完成；真实 RDP 窗口拖动与全屏效果待用户验收 |
-| BUG-011 | P1 | macOS 11 会话窗口的断开/全屏图标不可见；全屏顶部仍被整条工具栏占用；跟随窗口看不到 Windows 分辨率变化 | 两个 SF Symbol 在 macOS 11 返回 `nil` 后被空图片替代；全屏沿用普通窗口工具栏布局；桥接依赖 FreeRDP 的隐式 Display Control 默认值，且 UI 没有区分“布局已发送”和“远端 framebuffer 已改变” | 改用 macOS 11 可用符号和 AppKit 模板兜底并固定图标尺寸；全屏画布铺顶，顶部中央仅保留 `72x8` 悬浮触发条，悬停展开、移开延迟收起；显式同时开启 `SupportDisplayControl`/`DynamicResolutionUpdate`，显示远端实际帧尺寸并对未确认请求记录诊断和有限重试 | 代码已修复；待双架构 CI、macOS 11 全屏交互和真实 Windows 动态分辨率验收 |
+| BUG-011 | P1 | macOS 11 会话窗口的断开/全屏图标不可见；全屏顶部仍被整条工具栏占用；跟随窗口看不到 Windows 分辨率变化 | 两个 SF Symbol 在 macOS 11 返回 `nil` 后被空图片替代；全屏沿用普通窗口工具栏布局；桥接依赖 FreeRDP 的隐式 Display Control 默认值，且 UI 没有区分“布局已发送”和“远端 framebuffer 已改变” | 改用 macOS 11 可用符号和 AppKit 模板兜底并固定图标尺寸；全屏画布铺顶，顶部中央仅保留 `72x8` 悬浮触发条，悬停展开、移开延迟收起；显式同时开启 `SupportDisplayControl`/`DynamicResolutionUpdate`，显示远端实际帧尺寸并对未确认请求记录诊断和有限重试 | 代码、双架构 CI、Universal 2 签名门禁及 macOS 11 启动已通过；待全屏交互和真实 Windows 动态分辨率验收 |
 
 ### 14.3.4 代理与空白会话修复证据
 
@@ -831,7 +831,10 @@ RemoteDesktop/
 - 全屏布局：普通窗口继续保留完整顶部工具栏；进入原生全屏后画布直接贴合 content 顶部，工具栏缩为顶部中央 `72x8` 触发条，鼠标进入展开为 `336x42`，移出 300 ms 后收起，不再为顶部整条区域预留画布空间。
 - Display Control 取证：FreeRDP 3.30.0 官方命令行 `/dynamic-resolution` 同时设置 `FreeRDP_SupportDisplayControl` 与 `FreeRDP_DynamicResolutionUpdate`；库初始化时前者默认也为 `true`，所以旧代码缺少显式赋值不是已证实的唯一根因。桥接层现显式保持两者一致，以固定配置契约；最终仍以远端帧尺寸确认作为是否生效的判据。
 - 可观测性：工具栏显示远端实际 framebuffer 尺寸；新布局发送后显示“当前尺寸 > 请求尺寸”，收到目标尺寸帧后确认；1.5 秒无确认时最多重试三次，并以 `RDP_DISPLAY_CONTROL_ACTIVE`、`RDP_RESIZE_LAYOUT_SENT`、`RDP_RESIZE_CONFIRMED`、`RDP_RESIZE_RETRY`、`RDP_RESIZE_NOT_CONFIRMED` 等代码写入诊断。
-- 当前状态：源码和回归测试已更新；双架构 CI、Universal 2 产物和 macOS 11 真实 Windows 会话验收尚未完成，BUG-011 不能提前标记完成。
+- 自动化证据：提交 `9ed0c53` 的首次运行 [30405990292](https://github.com/tantanwu/AlstarsRDP/actions/runs/30405990292) 已通过双架构 Swift/FreeRDP 和 Universal 2 Release 编译，但新增按钮测试错误地比较 AppKit bezel frame `30x31` 与 alignment rect `28x28`，因此 118 项测试中有 2 个断言失败。提交 `27396da` 改为验证 alignment rect 后，运行 [30406492290](https://github.com/tantanwu/AlstarsRDP/actions/runs/30406492290) 全绿：118 项 AppKit/桥接/渲染测试、ad-hoc 签名、双架构依赖闭包、打包和仓库校验全部通过。
+- 产物证据：artifact ID `8706804838`，GitHub SHA-256 `af740e38afc8012d9da2ea96cd3e51758e8c61b25dc7daad52d0af8491874ad6`，内层 ZIP SHA-256 `4f2d87d6fa55e66a191544578f60b0c5cd183f4a7256a7dd00419e84e62b2022`；严格 codesign 通过，主程序包含 `x86_64 arm64`，两个 slice 最低系统均为 macOS 11.0。
+- 真机部署：新产物部署到 `/Users/jerry/AlstarsRDP-validation/run-30406492290/unpacked/RemoteDesktop.app`，未覆盖旧版；macOS 11.7.10 Intel 上应用保持运行，System Events 确认主窗口可见、标题为“远程桌面连接”、尺寸 `900x608`，统一日志未发现应用 error。
+- 当前状态：构建和基础启动已完成；断开/全屏图标、全屏小刘海悬停收起以及真实 Windows framebuffer 尺寸变化仍需连接会话后人工验收，BUG-011 不能提前标记完成。
 
 ### 14.4 每周状态模板
 
