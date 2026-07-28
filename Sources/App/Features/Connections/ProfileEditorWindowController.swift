@@ -109,6 +109,9 @@ final class ProfileEditorWindowController: NSWindowController {
         ]))
         scalePopup.addItems(withTitles: [NSLocalizedString("Fit window", comment: "fit"), NSLocalizedString("Actual size", comment: "actual"), NSLocalizedString("Dynamic resolution", comment: "dynamic")])
         keyboardPopup.addItems(withTitles: [NSLocalizedString("Mac shortcuts first", comment: "mac keyboard"), NSLocalizedString("Windows shortcuts first", comment: "windows keyboard")])
+        portField.placeholderString = "3389"
+        portField.toolTip = NSLocalizedString("Enter a port between 1 and 65535 using digits only.", comment: "port input help")
+        proxyPortField.toolTip = portField.toolTip
         tabView.addTabViewItem(tab(title: NSLocalizedString("Display", comment: "display"), rows: [
             row(NSLocalizedString("Width", comment: "width"), widthField),
             row(NSLocalizedString("Height", comment: "height"), heightField),
@@ -208,7 +211,7 @@ final class ProfileEditorWindowController: NSWindowController {
     private func loadProfile() {
         nameField.stringValue = profile.name
         hostField.stringValue = profile.target.endpoint.host
-        portField.integerValue = Int(profile.target.endpoint.port)
+        portField.stringValue = String(profile.target.endpoint.port)
         usernameField.stringValue = profile.usernameHint
         domainField.stringValue = profile.domainHint
         tagsField.stringValue = profile.tags.joined(separator: ", ")
@@ -242,7 +245,7 @@ final class ProfileEditorWindowController: NSWindowController {
         case let .socks5(proxy): routePopup.selectItem(at: 1); loadProxy(proxy, tls: false)
         case let .httpConnect(proxy, tls): routePopup.selectItem(at: tls ? 3 : 2); loadProxy(proxy, tls: tls)
         case let .rdGateway(gateway):
-            routePopup.selectItem(at: 4); proxyHostField.stringValue = gateway.endpoint.host; proxyPortField.integerValue = Int(gateway.endpoint.port)
+            routePopup.selectItem(at: 4); proxyHostField.stringValue = gateway.endpoint.host; proxyPortField.stringValue = String(gateway.endpoint.port)
             saveRouteCredentialButton.state = .on
             if enterprisePolicy.allowsCredentialSaving, let reference = gateway.credentialReference {
                 if let credential = loadCredential(reference) {
@@ -256,7 +259,7 @@ final class ProfileEditorWindowController: NSWindowController {
     }
 
     private func loadProxy(_ proxy: ProxyConfiguration, tls: Bool) {
-        proxyHostField.stringValue = proxy.endpoint.host; proxyPortField.integerValue = Int(proxy.endpoint.port)
+        proxyHostField.stringValue = proxy.endpoint.host; proxyPortField.stringValue = String(proxy.endpoint.port)
         proxyUsernameField.stringValue = proxy.usernameHint
         saveRouteCredentialButton.state = .on
         if enterprisePolicy.allowsCredentialSaving, let reference = proxy.credentialReference {
@@ -289,7 +292,9 @@ final class ProfileEditorWindowController: NSWindowController {
         } else {
             proxyPasswordField.placeholderString = nil
         }
-        if enabled && proxyPortField.integerValue == 0 { proxyPortField.integerValue = routePopup.indexOfSelectedItem == 4 ? 443 : (routePopup.indexOfSelectedItem == 1 ? 1080 : 8080) }
+        if enabled && proxyPortField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            proxyPortField.stringValue = String(routePopup.indexOfSelectedItem == 4 ? 443 : (routePopup.indexOfSelectedItem == 1 ? 1080 : 8080))
+        }
     }
 
     @objc private func cancel() {
@@ -307,7 +312,7 @@ final class ProfileEditorWindowController: NSWindowController {
             var updated = profile
             var credentialWrites: [CredentialWrite] = []
             updated.name = nameField.stringValue
-            let port = try validPort(portField.integerValue, field: "target")
+            let port = try validPort(portField, name: "target")
             let certificate = certificateNameField.stringValue.isEmpty ? hostField.stringValue : certificateNameField.stringValue
             updated.target = TargetIdentity(endpoint: Endpoint(host: hostField.stringValue, port: port), certificateName: certificate)
             updated.usernameHint = usernameField.stringValue; updated.domainHint = domainField.stringValue
@@ -380,7 +385,7 @@ final class ProfileEditorWindowController: NSWindowController {
     private func buildRouteForSave() throws -> (route: RouteConfiguration, writes: [CredentialWrite]) {
         let index = routePopup.indexOfSelectedItem
         guard index != 0 else { return (.direct, []) }
-        let endpoint = Endpoint(host: proxyHostField.stringValue, port: try validPort(proxyPortField.integerValue, field: index == 4 ? "gateway" : "proxy"))
+        let endpoint = Endpoint(host: proxyHostField.stringValue, port: try validPort(proxyPortField, name: index == 4 ? "gateway" : "proxy"))
         if index == 4 {
             let credential = try credentialWrite(
                 kind: .gateway,
@@ -485,9 +490,8 @@ final class ProfileEditorWindowController: NSWindowController {
         routeTestButton.isEnabled = !saving
     }
 
-    private func validPort(_ value: Int, field: String) throws -> UInt16 {
-        guard (1...65535).contains(value) else { throw ProfileValidationError.invalidPort(field) }
-        return UInt16(value)
+    private func validPort(_ control: NSTextField, name: String) throws -> UInt16 {
+        try ConnectionFieldParser.port(control.stringValue, field: name)
     }
 
     private func applyEnterprisePolicy() {
@@ -609,7 +613,7 @@ final class ProfileEditorWindowController: NSWindowController {
         }
         do {
             let target = TargetIdentity(
-                endpoint: Endpoint(host: hostField.stringValue, port: try validPort(portField.integerValue, field: "target")),
+                endpoint: Endpoint(host: hostField.stringValue, port: try validPort(portField, name: "target")),
                 certificateName: certificateNameField.stringValue.isEmpty ? hostField.stringValue : certificateNameField.stringValue
             )
             let route = try routeForTest()
@@ -655,7 +659,7 @@ final class ProfileEditorWindowController: NSWindowController {
         guard index != 0 else { return .direct }
         let endpoint = Endpoint(
             host: proxyHostField.stringValue,
-            port: try validPort(proxyPortField.integerValue, field: index == 4 ? "gateway" : "proxy")
+            port: try validPort(proxyPortField, name: index == 4 ? "gateway" : "proxy")
         )
         if index == 4 { return .rdGateway(GatewayConfiguration(endpoint: endpoint)) }
         let proxy = ProxyConfiguration(endpoint: endpoint, resolvesTargetName: true)
@@ -681,6 +685,19 @@ final class ProfileEditorWindowController: NSWindowController {
         folderSummary.stringValue = sharedFolders.isEmpty
             ? NSLocalizedString("No folders shared", comment: "no shared folders")
             : sharedFolders.map(\.displayName).joined(separator: ", ")
+    }
+}
+
+enum ConnectionFieldParser {
+    static func port(_ rawValue: String, field: String) throws -> UInt16 {
+        let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty,
+              value.utf8.allSatisfy({ (48...57).contains($0) }),
+              let parsed = UInt32(value),
+              (1...65_535).contains(parsed) else {
+            throw ProfileValidationError.invalidPort(field)
+        }
+        return UInt16(parsed)
     }
 }
 

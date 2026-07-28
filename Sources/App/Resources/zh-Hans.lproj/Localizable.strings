@@ -81,6 +81,9 @@
 "Idle" = "空闲";
 "Negotiating TLS and authentication…" = "正在协商 TLS 和身份认证…";
 "Connected" = "已连接";
+"Connected. Waiting for the remote desktop…" = "已连接，正在等待远程桌面画面…";
+"Try Again" = "重试";
+"Enter a port between 1 and 65535 using digits only." = "端口只能包含数字，取值范围为 1 到 65535。";
 "Disconnecting…" = "正在断开…";
 "Unknown session state" = "未知会话状态";
 "Connection cancelled" = "连接已取消";

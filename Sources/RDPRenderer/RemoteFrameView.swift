@@ -32,6 +32,8 @@ public final class RemoteFrameView: NSView {
             }
         }
         super.init(frame: .zero)
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.black.cgColor
         rendererView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(rendererView)
         NSLayoutConstraint.activate([
@@ -46,15 +48,17 @@ public final class RemoteFrameView: NSView {
     public override var acceptsFirstResponder: Bool { true }
     public override func hitTest(_ point: NSPoint) -> NSView? { bounds.contains(point) ? self : nil }
 
-    public func updateFrame(_ data: Data, width: Int, height: Int, stride: Int) {
+    @discardableResult
+    public func updateFrame(_ data: Data, width: Int, height: Int, stride: Int) -> Bool {
         guard FrameBufferValidation.isValid(
             data: data,
             width: width,
             height: height,
             stride: stride
-        ) else { return }
+        ) else { return false }
         frameSize = CGSize(width: width, height: height)
         renderFrame(data, width, height, stride)
+        return true
     }
 
     public func remotePoint(for event: NSEvent) -> CGPoint {

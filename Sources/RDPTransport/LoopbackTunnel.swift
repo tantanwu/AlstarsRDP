@@ -9,21 +9,33 @@ public struct LocalTunnelEndpoint: Equatable, Sendable {
     public var targetIdentity: TargetIdentity
 }
 
+typealias RouteConnectOperation = @Sendable (
+    TargetIdentity,
+    RouteConfiguration,
+    ProxyCredential?
+) async throws -> ConnectedRoute
+
 public final class LoopbackTunnel: @unchecked Sendable {
-    private let routeConnector: RouteConnector
+    private let connectRoute: RouteConnectOperation
     private let queue = DispatchQueue(label: "com.example.RemoteDesktop.loopback")
     private let lock = NSLock()
     private var listener: NWListener?
     private var connections: [ObjectIdentifier: NWConnection] = [:]
     private var connectionTasks: [UUID: TunnelTaskHandle] = [:]
-    private var route: RouteConfiguration?
-    private var target: TargetIdentity?
-    private var credential: ProxyCredential?
+    private var preparedRoute: ConnectedRoute?
     private var generation: UInt64 = 0
     private var isRunning = false
     private var hasAcceptedConnection = false
 
-    public init(routeConnector: RouteConnector) { self.routeConnector = routeConnector }
+    public init(routeConnector: RouteConnector) {
+        connectRoute = { target, route, credential in
+            try await routeConnector.connect(target: target, route: route, credential: credential)
+        }
+    }
+
+    init(connectRoute: @escaping RouteConnectOperation) {
+        self.connectRoute = connectRoute
+    }
 
     deinit { stop() }
 
@@ -35,14 +47,25 @@ public final class LoopbackTunnel: @unchecked Sendable {
         stop()
         _ = try target.validated()
         _ = try route.validated()
+        let connectedRoute = try await connectRoute(target, route, credential)
+        do {
+            try Task.checkCancellation()
+        } catch {
+            connectedRoute.connection.cancel()
+            throw error
+        }
         let parameters = NWParameters.tcp
         parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: .any)
-        let listener = try NWListener(using: parameters, on: .any)
+        let listener: NWListener
+        do {
+            listener = try NWListener(using: parameters, on: .any)
+        } catch {
+            connectedRoute.connection.cancel()
+            throw error
+        }
         let currentGeneration = prepare(
             listener: listener,
-            target: target,
-            route: route,
-            credential: credential
+            connectedRoute: connectedRoute
         )
 
         listener.newConnectionHandler = { [weak self] downstream in
@@ -80,17 +103,14 @@ public final class LoopbackTunnel: @unchecked Sendable {
 
     private func prepare(
         listener: NWListener,
-        target: TargetIdentity,
-        route: RouteConfiguration,
-        credential: ProxyCredential?
+        connectedRoute: ConnectedRoute
     ) -> UInt64 {
         lock.lock()
         defer { lock.unlock() }
         generation &+= 1
-        self.target = target
-        self.route = route
-        self.credential = credential
+        self.preparedRoute = connectedRoute
         self.listener = listener
+        connections[ObjectIdentifier(connectedRoute.connection)] = connectedRoute.connection
         isRunning = true
         hasAcceptedConnection = false
         return generation
@@ -113,9 +133,7 @@ public final class LoopbackTunnel: @unchecked Sendable {
         connectionTasks.removeAll()
         let currentListener = listener
         listener = nil
-        target = nil
-        route = nil
-        credential = nil
+        preparedRoute = nil
         isRunning = false
         hasAcceptedConnection = false
         lock.unlock()
@@ -142,28 +160,21 @@ public final class LoopbackTunnel: @unchecked Sendable {
         }
         let task = Task { [weak self] in
             guard let self else { downstream.cancel(); return }
-            var upstream: NWConnection?
+            let upstream = configuration.connectedRoute.connection
             defer {
                 downstream.cancel()
-                upstream?.cancel()
+                upstream.cancel()
                 self.forget(downstream)
-                if let upstream { self.forget(upstream) }
+                self.forget(upstream)
                 self.forgetTask(taskID)
             }
             do {
                 try await downstream.waitUntilReady(on: queue)
-                let connected = try await routeConnector.connect(
-                    target: configuration.target,
-                    route: configuration.route,
-                    credential: configuration.credential
-                )
-                upstream = connected.connection
-                guard remember(connected.connection, generation: generation) else { return }
-                if !connected.prefetchedTargetData.isEmpty {
-                    try await downstream.sendAll(connected.prefetchedTargetData)
+                if !configuration.connectedRoute.prefetchedTargetData.isEmpty {
+                    try await downstream.sendAll(configuration.connectedRoute.prefetchedTargetData)
                 }
-                async let up: Void = relay(from: downstream, to: connected.connection)
-                async let down: Void = relay(from: connected.connection, to: downstream)
+                async let up: Void = relay(from: downstream, to: upstream)
+                async let down: Void = relay(from: upstream, to: downstream)
                 _ = try await (up, down)
             } catch { return }
         }
@@ -180,17 +191,17 @@ public final class LoopbackTunnel: @unchecked Sendable {
 
     private func claimConfiguration(
         for expectedGeneration: UInt64
-    ) -> (target: TargetIdentity, route: RouteConfiguration, credential: ProxyCredential?, listener: NWListener)? {
+    ) -> (connectedRoute: ConnectedRoute, listener: NWListener)? {
         lock.lock(); defer { lock.unlock() }
         guard expectedGeneration == generation,
               isRunning,
               !hasAcceptedConnection,
               let listener,
-              let target,
-              let route else { return nil }
+              let preparedRoute else { return nil }
         hasAcceptedConnection = true
         self.listener = nil
-        return (target, route, credential, listener)
+        self.preparedRoute = nil
+        return (preparedRoute, listener)
     }
 
     private func remember(_ connection: NWConnection, generation expectedGeneration: UInt64) -> Bool {

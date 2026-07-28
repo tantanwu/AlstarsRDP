@@ -20,6 +20,12 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
     private let canvas: RemoteFrameView
     private let statusLabel = NSTextField(labelWithString: "")
     private let progress = NSProgressIndicator()
+    private let statusOverlay = NSStackView()
+    private let retryButton = NSButton(
+        title: NSLocalizedString("Try Again", comment: "retry connection"),
+        target: nil,
+        action: nil
+    )
     private var session: RDPSession?
     private var tunnel: LoopbackTunnel?
     private var connectTask: Task<Void, Never>?
@@ -199,7 +205,7 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
                 self.connectTask = nil
                 self.releaseConnectionResources()
                 self.clearEphemeralCredentials()
-                self.showStatus(error.localizedDescription, busy: false)
+                self.showStatus(error.localizedDescription, busy: false, retryable: true)
                 await self.diagnostics.record(DiagnosticEvent(
                     level: .error, category: .transport, code: "CONNECT_PREPARE_FAILED",
                     message: "Connection preparation failed.",
@@ -221,20 +227,47 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
         toolbar.addArrangedSubview(button(symbol: "arrow.clockwise", tooltip: NSLocalizedString("Reconnect", comment: "reconnect"), action: #selector(reconnect)))
         toolbar.addArrangedSubview(button(symbol: "rectangle.inset.filled", tooltip: NSLocalizedString("Toggle Full Screen", comment: "full screen"), action: #selector(toggleFullScreen)))
         toolbar.addArrangedSubview(button(symbol: "keyboard", tooltip: NSLocalizedString("Send Control-Alt-Delete", comment: "cad"), action: #selector(sendControlAltDelete)))
-        toolbar.addArrangedSubview(NSView())
-        progress.style = .spinning; progress.controlSize = .small; progress.isDisplayedWhenStopped = false
-        statusLabel.textColor = .secondaryLabelColor; statusLabel.lineBreakMode = .byTruncatingTail
-        toolbar.addArrangedSubview(progress); toolbar.addArrangedSubview(statusLabel)
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        toolbar.addArrangedSubview(spacer)
+
+        progress.style = .spinning
+        progress.controlSize = .regular
+        progress.isDisplayedWhenStopped = false
+        statusLabel.textColor = .white
+        statusLabel.font = .systemFont(ofSize: 16, weight: .medium)
+        statusLabel.alignment = .center
+        statusLabel.lineBreakMode = .byWordWrapping
+        statusLabel.maximumNumberOfLines = 4
+        retryButton.target = self
+        retryButton.action = #selector(reconnect)
+        retryButton.isHidden = true
+        statusOverlay.orientation = .vertical
+        statusOverlay.alignment = .centerX
+        statusOverlay.spacing = 12
+        statusOverlay.translatesAutoresizingMaskIntoConstraints = false
+        statusOverlay.addArrangedSubview(progress)
+        statusOverlay.addArrangedSubview(statusLabel)
+        statusOverlay.addArrangedSubview(retryButton)
+
         canvas.translatesAutoresizingMaskIntoConstraints = false
-        content.addSubview(toolbar); content.addSubview(canvas)
+        content.addSubview(toolbar)
+        content.addSubview(canvas)
+        content.addSubview(statusOverlay)
         NSLayoutConstraint.activate([
             toolbar.topAnchor.constraint(equalTo: content.topAnchor, constant: 8),
             toolbar.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 10),
             toolbar.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -10),
+            toolbar.heightAnchor.constraint(greaterThanOrEqualToConstant: 28),
             canvas.topAnchor.constraint(equalTo: toolbar.bottomAnchor, constant: 8),
             canvas.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             canvas.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            canvas.bottomAnchor.constraint(equalTo: content.bottomAnchor)
+            canvas.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+            statusOverlay.centerXAnchor.constraint(equalTo: canvas.centerXAnchor),
+            statusOverlay.centerYAnchor.constraint(equalTo: canvas.centerYAnchor),
+            statusOverlay.leadingAnchor.constraint(greaterThanOrEqualTo: canvas.leadingAnchor, constant: 40),
+            statusOverlay.trailingAnchor.constraint(lessThanOrEqualTo: canvas.trailingAnchor, constant: -40),
+            statusLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 640)
         ])
     }
 
@@ -305,7 +338,7 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
             session.disconnect()
         } else {
             releaseConnectionResources()
-            showStatus(NSLocalizedString("Disconnected", comment: "disconnected"), busy: false)
+            showStatus(NSLocalizedString("Disconnected", comment: "disconnected"), busy: false, retryable: true)
         }
     }
 
@@ -349,7 +382,7 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
         case .connecting: showStatus(NSLocalizedString("Negotiating TLS and authentication…", comment: "negotiating"), busy: true)
         case .connected:
             reconnectAttempt = 0
-            showStatus(NSLocalizedString("Connected", comment: "connected"), busy: false)
+            showStatus(NSLocalizedString("Connected. Waiting for the remote desktop…", comment: "waiting for first frame"), busy: true)
             window?.makeFirstResponder(canvas)
         case .disconnecting: showStatus(NSLocalizedString("Disconnecting…", comment: "disconnecting"), busy: true)
         case .closed:
@@ -361,7 +394,7 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
             } else if reconnectAfterNetworkRestored && networkWasAvailable {
                 restartAfterNetworkRestored()
             } else {
-                showStatus(NSLocalizedString("Disconnected", comment: "disconnected"), busy: false)
+                showStatus(NSLocalizedString("Disconnected", comment: "disconnected"), busy: false, retryable: true)
             }
         case .failed:
             finish(session: session)
@@ -372,7 +405,10 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
 
     func session(_ session: RDPSession, didReceiveFrame frame: Data, width: UInt32, height: UInt32, stride: UInt32) {
         guard self.session === session else { return }
-        canvas.updateFrame(frame, width: Int(width), height: Int(height), stride: Int(stride))
+        guard canvas.updateFrame(frame, width: Int(width), height: Int(height), stride: Int(stride)) else { return }
+        progress.stopAnimation(nil)
+        retryButton.isHidden = true
+        statusOverlay.isHidden = true
     }
 
     func session(_ session: RDPSession, decideCertificate certificate: RDPCertificateInfo) -> RDPCertificateDecision {
@@ -425,7 +461,11 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
         guard permitsAutomaticReconnect, !isClosing, disposition == .retryable,
               reconnectAttempt < profile.reconnect.maximumAttempts else {
             clearEphemeralCredentials()
-            showStatus(String(format: NSLocalizedString("Connection failed (0x%08X)", comment: "failure code"), errorCode), busy: false)
+            showStatus(
+                String(format: NSLocalizedString("Connection failed (0x%08X)", comment: "failure code"), errorCode),
+                busy: false,
+                retryable: true
+            )
             return
         }
         reconnectAttempt += 1
@@ -699,8 +739,10 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
         button.toolTip = NSLocalizedString("Managed by your organization", comment: "managed setting tooltip")
     }
 
-    private func showStatus(_ text: String, busy: Bool) {
+    private func showStatus(_ text: String, busy: Bool, retryable: Bool = false) {
         statusLabel.stringValue = text
+        statusOverlay.isHidden = false
+        retryButton.isHidden = !retryable
         if busy { progress.startAnimation(nil) } else { progress.stopAnimation(nil) }
     }
 
