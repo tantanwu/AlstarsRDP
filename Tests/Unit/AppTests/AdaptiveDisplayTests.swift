@@ -94,8 +94,14 @@ final class AdaptiveDisplayTests: XCTestCase {
             XCTAssertTrue(fullScreen?.image?.isValid == true)
             XCTAssertGreaterThan(disconnect?.image?.size.width ?? 0, 0)
             XCTAssertGreaterThan(fullScreen?.image?.size.width ?? 0, 0)
-            XCTAssertEqual(disconnect?.frame.size, NSSize(width: 28, height: 28))
-            XCTAssertEqual(fullScreen?.frame.size, NSSize(width: 28, height: 28))
+            XCTAssertEqual(
+                disconnect.map { $0.alignmentRect(forFrame: $0.frame).size },
+                NSSize(width: 28, height: 28)
+            )
+            XCTAssertEqual(
+                fullScreen.map { $0.alignmentRect(forFrame: $0.frame).size },
+                NSSize(width: 28, height: 28)
+            )
 
             controller.windowWillEnterFullScreen(Notification(name: NSWindow.willEnterFullScreenNotification))
             window.contentView?.layoutSubtreeIfNeeded()
