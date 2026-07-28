@@ -81,6 +81,7 @@
 "Disconnect" = "断开连接";
 "Reconnect" = "重新连接";
 "Toggle Full Screen" = "切换全屏";
+"Remote frame size" = "远端画面分辨率";
 "Send Control-Alt-Delete" = "发送 Ctrl+Alt+Delete";
 "Disconnected" = "已断开";
 "Restarting connection…" = "正在重新建立连接…";

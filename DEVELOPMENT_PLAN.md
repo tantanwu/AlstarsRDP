@@ -124,7 +124,7 @@
 | UX-002 | P0 | Core Graphics 首屏渲染 | 建链后正确显示、缩放和刷新 | 开发中 |
 | UX-003 | P0 | Metal 高性能渲染 | 无明显撕裂；CPU/内存符合性能预算 | 开发中 |
 | UX-004 | P0 | Retina 和缩放 | backing scale、逻辑点与远程像素映射正确 | 开发中 |
-| UX-005 | P0 | 动态分辨率 | 窗口调整防抖，无连续重置风暴 | 待办 |
+| UX-005 | P0 | 动态分辨率 | 窗口调整防抖，无连续重置风暴 | 开发中 |
 | UX-006 | P0 | 窗口和全屏 | 菜单栏、Dock、多空间行为符合 macOS | 开发中 |
 | UX-007 | P0 | 鼠标移动、按键、滚轮 | 坐标、左右键、精确滚动正确 | 开发中 |
 | UX-008 | P0 | 键盘扫描码与组合键 | 按下/释放成对；焦点丢失时释放全部按键 | 开发中 |
@@ -655,7 +655,7 @@ RemoteDesktop/
 
 - [~] `M3-01` 收藏、最近记录、标签、名称/主机/标签搜索和复制源码已实现；标签与字面通配符数据库测试已编写，待 macOS 运行和 UI 验收。
 - [~] `M3-02` 独立会话窗口、session ID、回调与隧道隔离已实现；标签页/XPC 隔离待完成。
-- [ ] `M3-03` 动态分辨率和多 DPI 基础支持。
+- [~] `M3-03` 动态分辨率和多 DPI 基础支持已实现；等待 Windows 真机确认远端 framebuffer 尺寸变化及多显示器 DPI 验收。
 - [ ] `M3-04` 文本与图片剪贴板、策略和大小限制。
 - [~] `M3-05` 有限指数退避、认证失败禁止重试、睡眠和网络切换监听已实现，待故障注入验收。
 - [~] `M3-06` 诊断时间线、脱敏、预览、清理和导出 UI 已实现；MDM 可禁止私有数据导出，待隐私审查。
@@ -707,13 +707,13 @@ RemoteDesktop/
 
 | 指标 | 当前值 | 更新时间 |
 |---|---:|---|
-| 当前里程碑 | M0 技术验证与基线 | 2026-07-28 |
-| 总体状态 | 开发中（Universal 2 CI 已通过；macOS 11 Intel 的 Direct TLS/NLA 与真实首帧已通过；SOCKS5/HTTP CONNECT 隧道可达但完整 RDP 因逻辑服务器名错误仍待修复版验收；分辨率严格保存修复待验证） | 2026-07-28 |
+| 当前里程碑 | M0 技术验证与基线 | 2026-07-29 |
+| 总体状态 | 开发中（Universal 2 CI 与 macOS 11 Intel 的 Direct、SOCKS5 真实首帧已通过；全屏悬浮工具栏、macOS 11 图标兼容及 Display Control 显式启用修复待新 CI 和真机验收） | 2026-07-29 |
 | 已完成任务 | 3 | 2026-07-28 |
 | P0 未关闭缺陷 | 0 | 2026-07-28 |
-| P1 未关闭缺陷 | 2 | 2026-07-28 |
+| P1 未关闭缺陷 | 3 | 2026-07-29 |
 | 最大风险 | 尚无受控 Windows/RD Gateway/企业代理实验室，无法验证实际 TLS/NLA、代理、网关与重定向行为 | 2026-07-28 |
-| 下一门禁 | 新修复版通过双架构 CI 后，在 macOS 11 Intel 分别完成 Direct、SOCKS5、HTTP CONNECT 首帧和分辨率关闭编辑器后重开持久化验收 | 待新构建及 GUI 验收 |
+| 下一门禁 | 新修复版通过双架构 CI 后，在 macOS 11 Intel 验证工具栏图标、全屏小刘海和远端 framebuffer 分辨率确认；HTTP CONNECT 首帧仍需单独验收 | 待新构建及 GUI 验收 |
 
 ### 14.2 当前实现快照
 
@@ -725,7 +725,7 @@ RemoteDesktop/
 | 配置与凭据 | SQLite schema v1/WAL、名称/主机/标签搜索、严格 schema、流式输入大小门禁、版本化备份/恢复、数据库/WAL/SHM 批量隔离及失败回滚、导入/迁移回滚失败报告、配置删除事务、凭据唯一所有权、乐观并发、删除/更新竞态防护，三类 Keychain 隔离引用，跨存储事务串行化、临时凭据提示，以及写入/落库/旧引用清理和回滚残留报告；备份剥离全部 Keychain 引用和共享目录授权，恢复清理无引用 Keychain 项；Keychain 查询已移出 AppKit 主线程 | 新 Keychain 后台查询测试通过 CI；macOS Keychain 授权、并发、故障注入与恢复路径人工验收 |
 | 网络代理 | Direct、SOCKS5、HTTP/HTTPS CONNECT、仅 loopback 随机端口隧道、代次化停止/失败连接回收、目标/代理/网关统一校验、SOCKS5 域名及 IPv4/IPv6 ATYP、代理端 DNS、Basic、防注入、编码前请求/凭据边界、响应上限、临时代理凭据和 15 秒路径测试；代理握手现于 FreeRDP 启动前完成并将错误返回 UI；macOS 11 上 SOCKS5/HTTP CONNECT 已到达真实 RDP 目标；本地 socket 地址与 NLA 逻辑服务器名已分离 | 新映射通过 CI，并通过应用分别完成 SOCKS5/HTTP CONNECT 的 RDP 登录与首帧；PAC、本机目标 DNS 和企业代理矩阵 |
 | RDP 核心 | FreeRDP TLS/NLA、禁用旧 RDP Security、原始证书名、RD Gateway、取消、证书决策桥接及受限终态转换；补齐官方客户端路径要求的静态通道 provider；增加分阶段错误、原生错误名/描述、WinPR/socket 错误和脱敏 FreeRDP 日志；已为 NTLM 构建 WinPR 内置 MD4/RC4 并增加无外部 OpenSSL provider 的已知向量门禁；Direct TLS/NLA 与真实首帧已在 macOS 11 Intel 通过 | 代理完整会话首帧；Windows/RD Gateway 实测；完整认证/错误码矩阵 |
-| 会话与输入 | 独立 session ID、旧回调过滤、有限退避、睡眠/网络路径处理、Metal/Core Graphics 自动回退、统一帧边界校验、256 MiB 单帧上限、仅保留最新帧、边界坐标、拖拽 MOVE、两种 Command 模式、全屏和安全序列；Objective-C++/AppKit/renderer 已编译测试 | 帧关闭竞态实测；动态分辨率更新；键盘布局与实机性能矩阵 |
+| 会话与输入 | 独立 session ID、旧回调过滤、有限退避、睡眠/网络路径处理、Metal/Core Graphics 自动回退、统一帧边界校验、256 MiB 单帧上限、仅保留最新帧、边界坐标、拖拽 MOVE、两种 Command 模式、原生全屏、悬浮工具栏、RDPEDISP 自适应分辨率和安全序列；Objective-C++/AppKit/renderer 已编译测试 | 帧关闭竞态实测；Windows 端动态分辨率响应与多 DPI 验收；键盘布局与实机性能矩阵 |
 | 资源重定向 | FreeRDP 能力开关；用户选目录、安全书签、书签元数据边界和会话级授权生命周期 | 以 3.30.0 头文件完成 rdpdr 设备注册；剪贴板控制器、通道打包和音频/设备实测 |
 | 企业管理 | MDM/强制偏好解析；重连、缩放、重定向上限；禁止保存凭据；禁止私有诊断导出；设置 UI 锁定和连接前再次收敛；macOS 11 deployment target 编译已通过 | 真实 MDM 下发、移除与绕过测试；管理员签收 |
 | 诊断与安全 | 结构化路由/会话事件、私有字段哈希、敏感字段入口拒绝、诊断预览/清理/脱敏导出，以及文件、配置、凭据和帧缓冲大小门禁 | 崩溃收集策略、安全评审和 fuzz/长稳证据 |
@@ -772,6 +772,7 @@ RemoteDesktop/
 | BUG-008 | P1 | 修改分辨率后无法保存，重新打开仍为旧值 | 宽高继续使用 `NSTextField.integerValue` 和 clamping 转换，未采用端口修复后的严格无分组字符串路径 | 加载使用无分组十进制字符串；保存严格拒绝分组、小数、负数、空值、越界和超像素上限输入；增加解析回归测试 | 已修复；CI 通过，macOS 11 真机保存、关闭并重开编辑器验证通过 |
 | BUG-009 | P2 | 打开设置或连接时，Keychain 授权查询可能阻塞 AppKit 主线程 | 同步 `SecItemCopyMatching` 从主 actor 调用 | 通过 `Task.detached` 后台读取，主线程仅消费结果；增加线程回归测试 | 已修复；双架构 CI 与 macOS 11 后台线程测试通过 |
 | BUG-010 | P1 | 分辨率设置不直观，远程窗口不能进入全屏，“动态分辨率”不会随本地窗口变化 | 配置只在连接前设置 `DynamicResolutionUpdate` 布尔值，没有接入 Display Control 通道、发送 Monitor Layout 更新或监听窗口事件；创建窗口时错误地预置 `.fullScreen` 状态位，且没有标准全屏菜单行为 | 接入 RDPEDISP Display Control；按画布 backing pixels、DPI 和协议边界计算尺寸，拖动去抖并在屏幕/全屏变化后立即同步；改用 `.fullScreenPrimary` 和标准快捷键；显示设置增加常用分辨率与“跟随窗口”模式 | 代码、双架构 CI、Universal 2 产物和 macOS 11 启动验证已完成；真实 RDP 窗口拖动与全屏效果待用户验收 |
+| BUG-011 | P1 | macOS 11 会话窗口的断开/全屏图标不可见；全屏顶部仍被整条工具栏占用；跟随窗口看不到 Windows 分辨率变化 | 两个 SF Symbol 在 macOS 11 返回 `nil` 后被空图片替代；全屏沿用普通窗口工具栏布局；桥接依赖 FreeRDP 的隐式 Display Control 默认值，且 UI 没有区分“布局已发送”和“远端 framebuffer 已改变” | 改用 macOS 11 可用符号和 AppKit 模板兜底并固定图标尺寸；全屏画布铺顶，顶部中央仅保留 `72x8` 悬浮触发条，悬停展开、移开延迟收起；显式同时开启 `SupportDisplayControl`/`DynamicResolutionUpdate`，显示远端实际帧尺寸并对未确认请求记录诊断和有限重试 | 代码已修复；待双架构 CI、macOS 11 全屏交互和真实 Windows 动态分辨率验收 |
 
 ### 14.3.4 代理与空白会话修复证据
 
@@ -814,7 +815,7 @@ RemoteDesktop/
 ### 14.3.8 自适应分辨率与全屏修复
 
 - 用户验收反馈：部署运行 `30344220649` 后，SOCKS5 代理完整会话可以连接；分辨率持久化问题已消失。后续发现显示模式不够直观、会话窗口无法正常进入 macOS 全屏，且远端桌面尺寸不会随本地窗口变化。
-- 协议根因：`DynamicResolutionUpdate` 只负责请求加载 `disp` 动态虚拟通道，应用仍必须订阅 `Microsoft::Windows::RDS::DisplayControl` 的连接/断开事件，在服务器发送 Display Control Caps 后调用 `SendMonitorLayout`。旧桥接未实现该生命周期。
+- 协议根因：动态分辨率需要 `SupportDisplayControl` 将 `disp` 加入通道加载列表，并由 `DynamicResolutionUpdate` 开启客户端动态更新策略；应用还必须订阅 `Microsoft::Windows::RDS::DisplayControl` 的连接/断开事件，在服务器发送 Display Control Caps 后调用 `SendMonitorLayout`。旧桥接未实现该生命周期。
 - 自适应策略：动态模式连接前使用当前画布 backing pixels 作为初始桌面；Retina backing scale 映射到 DesktopScaleFactor；宽度取偶数，单边限制在 RDPEDISP 的 200–8192 范围，总像素不超过 64 Mi；窗口拖动使用 500 ms 去抖，拖动结束、屏幕变化、backing scale 变化以及进入/退出全屏立即同步。同步任务使用单调代次避免取消竞态，Display Control 通道重新激活后强制重发当前布局。
 - 设置体验：显示模式区分“缩放固定分辨率”“固定分辨率原始大小”“跟随窗口”；固定模式提供 1280x720 至 3840x2160 常见预设和自定义输入；跟随窗口时禁用无效的固定宽高输入，保存不再被失效输入阻断。
 - 全屏修复：创建窗口时不再预置 `.fullScreen` 状态位，改用 `.fullScreenPrimary` 原生行为；工具栏按钮与“窗口”菜单均调用 `toggleFullScreen`，并提供 Control-Command-F。
@@ -823,6 +824,14 @@ RemoteDesktop/
 - 产物证据：GitHub artifact `AlstarsRDP-macOS11-Universal2-unsigned` SHA-256 为 `d89c440cfea549fa1921a50da5e4d315c3458710243073e25c831b8b2831fb1d`，内部应用压缩包 SHA-256 为 `78819c629a6d7fa41cd1a021f73a195ff333cde44712186955143d6838805ba7`。严格 codesign 校验通过，主程序同时包含 x86_64/arm64，两个 slice 的最低系统均为 macOS 11.0。
 - macOS 11 部署：新产物部署到 `/Users/jerry/AlstarsRDP-validation/run-30375985139/unpacked/RemoteDesktop.app`，在 macOS 11.7.10 Intel 真机成功启动且统一日志无应用错误；未覆盖上一可用版本。
 - 待用户验收：选择“跟随窗口”后连接真实 Windows，确认窗口拖动、进入/退出全屏时远端实际分辨率变化；如有 Retina/非 Retina 双屏，确认跨屏后 DPI 与分辨率同步；HTTP CONNECT 首帧仍按 BUG-007 单独验收。
+
+### 14.3.9 全屏悬浮工具栏与远端分辨率确认
+
+- macOS 11 图标取证：`rectangle.portrait.and.arrow.right` 和 `rectangle.inset.filled` 在 macOS 11.7.10 返回 `nil`，旧代码随后构造空 `NSImage`，所以按钮可点击但没有可见内容；改用已在 macOS 11 验证的 `xmark.circle`、`arrow.up.left.and.arrow.down.right`，并保留 AppKit 模板图片兜底。
+- 全屏布局：普通窗口继续保留完整顶部工具栏；进入原生全屏后画布直接贴合 content 顶部，工具栏缩为顶部中央 `72x8` 触发条，鼠标进入展开为 `336x42`，移出 300 ms 后收起，不再为顶部整条区域预留画布空间。
+- Display Control 取证：FreeRDP 3.30.0 官方命令行 `/dynamic-resolution` 同时设置 `FreeRDP_SupportDisplayControl` 与 `FreeRDP_DynamicResolutionUpdate`；库初始化时前者默认也为 `true`，所以旧代码缺少显式赋值不是已证实的唯一根因。桥接层现显式保持两者一致，以固定配置契约；最终仍以远端帧尺寸确认作为是否生效的判据。
+- 可观测性：工具栏显示远端实际 framebuffer 尺寸；新布局发送后显示“当前尺寸 > 请求尺寸”，收到目标尺寸帧后确认；1.5 秒无确认时最多重试三次，并以 `RDP_DISPLAY_CONTROL_ACTIVE`、`RDP_RESIZE_LAYOUT_SENT`、`RDP_RESIZE_CONFIRMED`、`RDP_RESIZE_RETRY`、`RDP_RESIZE_NOT_CONFIRMED` 等代码写入诊断。
+- 当前状态：源码和回归测试已更新；双架构 CI、Universal 2 产物和 macOS 11 真实 Windows 会话验收尚未完成，BUG-011 不能提前标记完成。
 
 ### 14.4 每周状态模板
 
@@ -973,6 +982,7 @@ RemoteDesktop/
 | 2026-07-28 | 0.2.9 | 增加 FreeRDP 原生错误诊断；定位 `0x0002000D` 为 OpenSSL 3 legacy provider 缺失导致的 NTLM MD4 初始化失败；改用 WinPR 内置 MD4/RC4 并增加无外部 provider 的逐架构加密向量门禁 | 真机已完成 TCP、X.224、TLS 取证，失败点收敛到 NLA/NTLM；避免应用运行时依赖 Homebrew OpenSSL 模块目录 | Codex |
 | 2026-07-28 | 0.3.0 | 完成 Direct TLS/NLA 与首帧验收；修复代理 loopback 地址污染 NLA/SPN 服务器身份、分辨率本地化解析与持久化、Keychain 查询阻塞主线程；增加服务器地址映射、配置复制、分辨率边界和后台线程测试 | 用户确认 Direct 已连接，但完整代理 RDP 仍失败且分辨率无法保存；FreeRDP 3.30.0 源码和真机数据库取证确认根因 | Codex |
 | 2026-07-28 | 0.3.1 | 修复 loopback listener 在 accepted socket 进入 `.ready` 前被取消的竞态；增加真实 TCP 双向 relay、预读数据、单连接和停止后重启集成测试；完成分辨率真机持久化验收 | SOCKS5 已完成代理握手，但完整 RDP 在本地随机端口接入阶段失败；原生日志和源码确认 listener 生命周期早于 downstream TCP 握手结束 | Codex |
+| 2026-07-29 | 0.3.2 | 修复 macOS 11 会话图标为空；全屏工具栏改为顶部中央自动收起的小刘海；显式启用 FreeRDP Display Control；增加远端帧尺寸确认、有限重试、诊断和 AppKit 回归测试 | 用户确认代理可连接后反馈全屏顶部仍占空间、图标不可见，且跟随窗口未体现 Windows 端分辨率变化；macOS 11 与 FreeRDP 3.30.0 源码取证确认兼容和可观测性缺口 | Codex |
 
 ---
 

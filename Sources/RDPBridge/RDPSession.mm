@@ -396,6 +396,7 @@ static BOOL RDPConfigureSettings(rdpSettings *settings, RDPConnectionConfigurati
               freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, TRUE) &&
               freerdp_settings_set_bool(settings, FreeRDP_TlsSecurity, TRUE) &&
               freerdp_settings_set_bool(settings, FreeRDP_RdpSecurity, FALSE) &&
+              freerdp_settings_set_bool(settings, FreeRDP_SupportDisplayControl, configuration.dynamicResolution) &&
               freerdp_settings_set_bool(settings, FreeRDP_DynamicResolutionUpdate, configuration.dynamicResolution) &&
               freerdp_settings_set_bool(settings, FreeRDP_RedirectClipboard, configuration.redirectClipboard) &&
               freerdp_settings_set_bool(settings, FreeRDP_AudioPlayback, configuration.audioPlayback) &&

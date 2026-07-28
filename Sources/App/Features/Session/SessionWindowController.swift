@@ -18,6 +18,10 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
     private let automaticReconnectEnabled: Bool
     private let enterprisePolicy: EnterprisePolicy
     private let canvas: RemoteFrameView
+    private let toolbarContainer = SessionToolbarContainer()
+    private let toolbar = NSStackView()
+    private let toolbarNotch = NSView()
+    private let remoteSizeLabel = NSTextField(labelWithString: "")
     private let statusLabel = NSTextField(labelWithString: "")
     private let progress = NSProgressIndicator()
     private let statusOverlay = NSStackView()
@@ -48,6 +52,23 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
     private var adaptiveResizeTask: Task<Void, Never>?
     private var adaptiveResizeGeneration: UInt64 = 0
     private var lastAdaptiveMetrics: AdaptiveDesktopMetrics?
+    private var requestedAdaptiveMetrics: AdaptiveDesktopMetrics?
+    private var adaptiveConfirmationTask: Task<Void, Never>?
+    private var adaptiveRetryCount = 0
+    private var displayControlActivated = false
+    private var lastRemoteFrameWidth: UInt32 = 0
+    private var lastRemoteFrameHeight: UInt32 = 0
+    private var lastResizeRejectionMetrics: AdaptiveDesktopMetrics?
+    private var fullscreenToolbarCollapseTask: Task<Void, Never>?
+    private var isSessionFullScreen = false
+    private var toolbarTopConstraint: NSLayoutConstraint?
+    private var toolbarLeadingConstraint: NSLayoutConstraint?
+    private var toolbarTrailingConstraint: NSLayoutConstraint?
+    private var toolbarWidthConstraint: NSLayoutConstraint?
+    private var toolbarHeightConstraint: NSLayoutConstraint?
+    private var toolbarContentConstraints: [NSLayoutConstraint] = []
+    private var canvasTopToToolbarConstraint: NSLayoutConstraint?
+    private var canvasTopToContentConstraint: NSLayoutConstraint?
 
     init(
         sessionID: UUID,
@@ -237,16 +258,63 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
 
     private func buildInterface() {
         guard let content = window?.contentView else { return }
-        let toolbar = NSStackView()
         toolbar.orientation = .horizontal; toolbar.alignment = .centerY; toolbar.spacing = 8
         toolbar.translatesAutoresizingMaskIntoConstraints = false
-        toolbar.addArrangedSubview(button(symbol: "rectangle.portrait.and.arrow.right", tooltip: NSLocalizedString("Disconnect", comment: "disconnect"), action: #selector(disconnect)))
-        toolbar.addArrangedSubview(button(symbol: "arrow.clockwise", tooltip: NSLocalizedString("Reconnect", comment: "reconnect"), action: #selector(reconnect)))
-        toolbar.addArrangedSubview(button(symbol: "rectangle.inset.filled", tooltip: NSLocalizedString("Toggle Full Screen", comment: "full screen"), action: #selector(toggleFullScreen)))
-        toolbar.addArrangedSubview(button(symbol: "keyboard", tooltip: NSLocalizedString("Send Control-Alt-Delete", comment: "cad"), action: #selector(sendControlAltDelete)))
+        toolbar.addArrangedSubview(button(
+            symbols: ["xmark.circle", "stop.circle"],
+            fallbackName: NSImage.stopProgressTemplateName,
+            tooltip: NSLocalizedString("Disconnect", comment: "disconnect"),
+            action: #selector(disconnect)
+        ))
+        toolbar.addArrangedSubview(button(
+            symbols: ["arrow.clockwise"],
+            fallbackName: NSImage.refreshTemplateName,
+            tooltip: NSLocalizedString("Reconnect", comment: "reconnect"),
+            action: #selector(reconnect)
+        ))
+        toolbar.addArrangedSubview(button(
+            symbols: ["arrow.up.left.and.arrow.down.right"],
+            fallbackName: NSImage.enterFullScreenTemplateName,
+            tooltip: NSLocalizedString("Toggle Full Screen", comment: "full screen"),
+            action: #selector(toggleFullScreen)
+        ))
+        toolbar.addArrangedSubview(button(
+            symbols: ["keyboard"],
+            fallbackName: NSImage.actionTemplateName,
+            tooltip: NSLocalizedString("Send Control-Alt-Delete", comment: "cad"),
+            action: #selector(sendControlAltDelete)
+        ))
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         toolbar.addArrangedSubview(spacer)
+        remoteSizeLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .medium)
+        remoteSizeLabel.textColor = .secondaryLabelColor
+        remoteSizeLabel.alignment = .right
+        remoteSizeLabel.lineBreakMode = .byClipping
+        remoteSizeLabel.toolTip = NSLocalizedString("Remote frame size", comment: "remote frame size")
+        remoteSizeLabel.setContentHuggingPriority(.required, for: .horizontal)
+        remoteSizeLabel.isHidden = true
+        toolbar.addArrangedSubview(remoteSizeLabel)
+
+        toolbarContainer.identifier = NSUserInterfaceItemIdentifier("SessionToolbarContainer")
+        toolbarContainer.translatesAutoresizingMaskIntoConstraints = false
+        toolbarContainer.wantsLayer = true
+        toolbarContainer.layer?.masksToBounds = true
+        toolbarContainer.onHoverChanged = { [weak self] hovering in
+            guard let self, self.isSessionFullScreen else { return }
+            if hovering {
+                self.showFullscreenToolbar()
+            } else {
+                self.scheduleFullscreenToolbarCollapse()
+            }
+        }
+        toolbarNotch.translatesAutoresizingMaskIntoConstraints = false
+        toolbarNotch.wantsLayer = true
+        toolbarNotch.layer?.backgroundColor = NSColor(calibratedWhite: 0.72, alpha: 0.9).cgColor
+        toolbarNotch.layer?.cornerRadius = 2
+        toolbarNotch.isHidden = true
+        toolbarContainer.addSubview(toolbar)
+        toolbarContainer.addSubview(toolbarNotch)
 
         progress.style = .spinning
         progress.controlSize = .regular
@@ -268,15 +336,33 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
         statusOverlay.addArrangedSubview(retryButton)
 
         canvas.translatesAutoresizingMaskIntoConstraints = false
-        content.addSubview(toolbar)
         content.addSubview(canvas)
+        content.addSubview(toolbarContainer)
         content.addSubview(statusOverlay)
+        toolbarTopConstraint = toolbarContainer.topAnchor.constraint(equalTo: content.topAnchor, constant: 8)
+        toolbarLeadingConstraint = toolbarContainer.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 10)
+        toolbarTrailingConstraint = toolbarContainer.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -10)
+        toolbarWidthConstraint = toolbarContainer.widthAnchor.constraint(equalToConstant: 72)
+        toolbarHeightConstraint = toolbarContainer.heightAnchor.constraint(equalToConstant: 32)
+        toolbarContentConstraints = [
+            toolbar.leadingAnchor.constraint(equalTo: toolbarContainer.leadingAnchor, constant: 8),
+            toolbar.trailingAnchor.constraint(equalTo: toolbarContainer.trailingAnchor, constant: -8),
+            toolbar.centerYAnchor.constraint(equalTo: toolbarContainer.centerYAnchor)
+        ]
+        canvasTopToToolbarConstraint = canvas.topAnchor.constraint(equalTo: toolbarContainer.bottomAnchor, constant: 8)
+        canvasTopToContentConstraint = canvas.topAnchor.constraint(equalTo: content.topAnchor)
         NSLayoutConstraint.activate([
-            toolbar.topAnchor.constraint(equalTo: content.topAnchor, constant: 8),
-            toolbar.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 10),
-            toolbar.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -10),
-            toolbar.heightAnchor.constraint(greaterThanOrEqualToConstant: 28),
-            canvas.topAnchor.constraint(equalTo: toolbar.bottomAnchor, constant: 8),
+            toolbarTopConstraint!,
+            toolbarLeadingConstraint!,
+            toolbarTrailingConstraint!,
+            toolbarHeightConstraint!,
+            toolbarContainer.centerXAnchor.constraint(equalTo: content.centerXAnchor),
+            toolbarContainer.widthAnchor.constraint(lessThanOrEqualTo: content.widthAnchor, constant: -20),
+            toolbarNotch.centerXAnchor.constraint(equalTo: toolbarContainer.centerXAnchor),
+            toolbarNotch.topAnchor.constraint(equalTo: toolbarContainer.topAnchor, constant: 2),
+            toolbarNotch.widthAnchor.constraint(equalToConstant: 54),
+            toolbarNotch.heightAnchor.constraint(equalToConstant: 4),
+            canvasTopToToolbarConstraint!,
             canvas.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             canvas.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             canvas.bottomAnchor.constraint(equalTo: content.bottomAnchor),
@@ -286,11 +372,26 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
             statusOverlay.trailingAnchor.constraint(lessThanOrEqualTo: canvas.trailingAnchor, constant: -40),
             statusLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 640)
         ])
+        NSLayoutConstraint.activate(toolbarContentConstraints)
     }
 
-    private func button(symbol: String, tooltip: String, action: Selector) -> NSButton {
-        let button = NSButton(image: NSImage(systemSymbolName: symbol, accessibilityDescription: tooltip) ?? NSImage(), target: self, action: action)
+    private func button(
+        symbols: [String],
+        fallbackName: NSImage.Name,
+        tooltip: String,
+        action: Selector
+    ) -> NSButton {
+        let image = symbols.compactMap {
+            NSImage(systemSymbolName: $0, accessibilityDescription: tooltip)
+        }.first ?? NSImage(named: fallbackName) ?? NSImage(named: NSImage.cautionName)!
+        image.isTemplate = true
+        let button = NSButton(image: image, target: self, action: action)
         button.bezelStyle = .texturedRounded; button.toolTip = tooltip; button.setAccessibilityLabel(tooltip)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            button.widthAnchor.constraint(equalToConstant: 28),
+            button.heightAnchor.constraint(equalToConstant: 28)
+        ])
         return button
     }
 
@@ -438,6 +539,25 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
     func session(_ session: RDPSession, didReceiveFrame frame: Data, width: UInt32, height: UInt32, stride: UInt32) {
         guard self.session === session else { return }
         guard canvas.updateFrame(frame, width: Int(width), height: Int(height), stride: Int(stride)) else { return }
+        let sizeChanged = width != lastRemoteFrameWidth || height != lastRemoteFrameHeight
+        lastRemoteFrameWidth = width
+        lastRemoteFrameHeight = height
+        if sizeChanged { updateRemoteSizeLabel() }
+        if let requested = requestedAdaptiveMetrics,
+           requested.width == width,
+           requested.height == height {
+            requestedAdaptiveMetrics = nil
+            adaptiveRetryCount = 0
+            adaptiveConfirmationTask?.cancel()
+            adaptiveConfirmationTask = nil
+            updateRemoteSizeLabel()
+            recordAdaptiveDisplayEvent(
+                level: .info,
+                code: "RDP_RESIZE_CONFIRMED",
+                message: "The remote frame confirmed the requested desktop size.",
+                metrics: requested
+            )
+        }
         progress.stopAnimation(nil)
         retryButton.isHidden = true
         statusOverlay.isHidden = true
@@ -445,7 +565,14 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
 
     func sessionDidActivateDisplayControl(_ session: RDPSession) {
         guard self.session === session else { return }
+        displayControlActivated = true
         lastAdaptiveMetrics = nil
+        lastResizeRejectionMetrics = nil
+        recordAdaptiveDisplayEvent(
+            level: .info,
+            code: "RDP_DISPLAY_CONTROL_ACTIVE",
+            message: "The server activated the RDP Display Control channel."
+        )
         scheduleAdaptiveResize(immediate: true)
     }
 
@@ -468,9 +595,13 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
 
     func windowWillClose(_ notification: Notification) {
         isClosing = true
+        fullscreenToolbarCollapseTask?.cancel()
+        fullscreenToolbarCollapseTask = nil
         adaptiveResizeGeneration &+= 1
         adaptiveResizeTask?.cancel()
         adaptiveResizeTask = nil
+        adaptiveConfirmationTask?.cancel()
+        adaptiveConfirmationTask = nil
         clearEphemeralCredentials()
         retryTask?.cancel(); retryTask = nil
         connectTask?.cancel(); connectTask = nil
@@ -482,15 +613,25 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
         scheduleAdaptiveResize()
     }
 
+    func windowWillEnterFullScreen(_ notification: Notification) {
+        setFullscreenToolbarPresentation(enabled: true, expanded: false)
+    }
+
+    func windowWillExitFullScreen(_ notification: Notification) {
+        setFullscreenToolbarPresentation(enabled: false, expanded: true)
+    }
+
     func windowDidEndLiveResize(_ notification: Notification) {
         scheduleAdaptiveResize(immediate: true)
     }
 
     func windowDidEnterFullScreen(_ notification: Notification) {
+        setFullscreenToolbarPresentation(enabled: true, expanded: false)
         scheduleAdaptiveResize(immediate: true)
     }
 
     func windowDidExitFullScreen(_ notification: Notification) {
+        setFullscreenToolbarPresentation(enabled: false, expanded: true)
         scheduleAdaptiveResize(immediate: true)
     }
 
@@ -510,8 +651,83 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
         adaptiveResizeGeneration &+= 1
         adaptiveResizeTask?.cancel()
         adaptiveResizeTask = nil
+        adaptiveConfirmationTask?.cancel()
+        adaptiveConfirmationTask = nil
         lastAdaptiveMetrics = nil
+        requestedAdaptiveMetrics = nil
+        adaptiveRetryCount = 0
+        displayControlActivated = false
+        lastResizeRejectionMetrics = nil
+        lastRemoteFrameWidth = 0
+        lastRemoteFrameHeight = 0
+        updateRemoteSizeLabel()
         releaseConnectionResources()
+    }
+
+    private func setFullscreenToolbarPresentation(enabled: Bool, expanded: Bool) {
+        guard let content = window?.contentView else { return }
+        isSessionFullScreen = enabled
+        fullscreenToolbarCollapseTask?.cancel()
+        fullscreenToolbarCollapseTask = nil
+
+        let horizontalConstraints = [
+            toolbarLeadingConstraint,
+            toolbarTrailingConstraint,
+            toolbarWidthConstraint,
+            canvasTopToToolbarConstraint,
+            canvasTopToContentConstraint
+        ].compactMap { $0 }
+        NSLayoutConstraint.deactivate(horizontalConstraints)
+        NSLayoutConstraint.deactivate(toolbarContentConstraints)
+
+        if enabled {
+            NSLayoutConstraint.activate([
+                toolbarWidthConstraint,
+                canvasTopToContentConstraint
+            ].compactMap { $0 })
+        } else {
+            NSLayoutConstraint.activate([
+                toolbarLeadingConstraint,
+                toolbarTrailingConstraint,
+                canvasTopToToolbarConstraint
+            ].compactMap { $0 })
+        }
+        toolbarTopConstraint?.constant = enabled ? 0 : 8
+
+        let showContent = !enabled || expanded
+        if showContent {
+            NSLayoutConstraint.activate(toolbarContentConstraints)
+        }
+        toolbar.isHidden = !showContent
+        toolbarNotch.isHidden = showContent
+        toolbarWidthConstraint?.constant = expanded ? 336 : 72
+        toolbarHeightConstraint?.constant = enabled ? (expanded ? 42 : 8) : 32
+        toolbarContainer.layer?.cornerRadius = enabled ? 6 : 0
+        toolbarContainer.layer?.backgroundColor = enabled
+            ? NSColor(calibratedWhite: 0.04, alpha: 0.9).cgColor
+            : NSColor.clear.cgColor
+        toolbar.arrangedSubviews.compactMap { $0 as? NSButton }.forEach {
+            $0.contentTintColor = enabled ? .white : .labelColor
+        }
+        remoteSizeLabel.textColor = enabled ? .white : .secondaryLabelColor
+        content.layoutSubtreeIfNeeded()
+    }
+
+    private func showFullscreenToolbar() {
+        fullscreenToolbarCollapseTask?.cancel()
+        fullscreenToolbarCollapseTask = nil
+        setFullscreenToolbarPresentation(enabled: true, expanded: true)
+    }
+
+    private func scheduleFullscreenToolbarCollapse() {
+        fullscreenToolbarCollapseTask?.cancel()
+        fullscreenToolbarCollapseTask = Task { [weak self] in
+            do { try await Task.sleep(nanoseconds: 300_000_000) }
+            catch { return }
+            guard let self, self.isSessionFullScreen else { return }
+            self.fullscreenToolbarCollapseTask = nil
+            self.setFullscreenToolbarPresentation(enabled: true, expanded: false)
+        }
     }
 
     private func currentAdaptiveMetrics() -> AdaptiveDesktopMetrics? {
@@ -553,10 +769,125 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
                 physicalWidth: metrics.physicalWidth,
                 physicalHeight: metrics.physicalHeight
             )
-            if sent { self.lastAdaptiveMetrics = metrics }
+            if sent {
+                self.lastAdaptiveMetrics = metrics
+                self.lastResizeRejectionMetrics = nil
+                if self.requestedAdaptiveMetrics != metrics {
+                    self.adaptiveRetryCount = 0
+                }
+                self.requestedAdaptiveMetrics = metrics
+                self.updateRemoteSizeLabel()
+                self.recordAdaptiveDisplayEvent(
+                    level: .info,
+                    code: "RDP_RESIZE_LAYOUT_SENT",
+                    message: "A desktop layout update was sent through RDP Display Control.",
+                    metrics: metrics
+                )
+                self.scheduleAdaptiveConfirmation(for: metrics)
+            } else if self.lastResizeRejectionMetrics != metrics {
+                self.lastResizeRejectionMetrics = metrics
+                self.recordAdaptiveDisplayEvent(
+                    level: .warning,
+                    code: "RDP_RESIZE_LAYOUT_REJECTED",
+                    message: "The desktop layout update could not be sent.",
+                    metrics: metrics,
+                    fields: ["displayControlActive": .boolean(self.displayControlActivated)]
+                )
+            }
             if self.adaptiveResizeGeneration == generation {
                 self.adaptiveResizeTask = nil
             }
+        }
+    }
+
+    private func scheduleAdaptiveConfirmation(for metrics: AdaptiveDesktopMetrics) {
+        adaptiveConfirmationTask?.cancel()
+        adaptiveConfirmationTask = Task { [weak self] in
+            do { try await Task.sleep(nanoseconds: 1_500_000_000) }
+            catch { return }
+            guard let self,
+                  self.requestedAdaptiveMetrics == metrics,
+                  !self.isClosing else { return }
+            if self.lastRemoteFrameWidth == metrics.width,
+               self.lastRemoteFrameHeight == metrics.height {
+                self.requestedAdaptiveMetrics = nil
+                self.adaptiveRetryCount = 0
+                self.adaptiveConfirmationTask = nil
+                self.updateRemoteSizeLabel()
+                return
+            }
+            guard self.window?.inLiveResize != true,
+                  self.currentAdaptiveMetrics() == metrics else {
+                self.adaptiveConfirmationTask = nil
+                return
+            }
+            guard self.adaptiveRetryCount < 3 else {
+                self.requestedAdaptiveMetrics = nil
+                self.adaptiveConfirmationTask = nil
+                self.updateRemoteSizeLabel()
+                self.recordAdaptiveDisplayEvent(
+                    level: .warning,
+                    code: "RDP_RESIZE_NOT_CONFIRMED",
+                    message: "The remote frame did not confirm the requested desktop size after retries.",
+                    metrics: metrics,
+                    fields: [
+                        "remoteWidth": .number(Double(self.lastRemoteFrameWidth)),
+                        "remoteHeight": .number(Double(self.lastRemoteFrameHeight))
+                    ]
+                )
+                return
+            }
+            self.adaptiveRetryCount += 1
+            self.lastAdaptiveMetrics = nil
+            self.adaptiveConfirmationTask = nil
+            self.recordAdaptiveDisplayEvent(
+                level: .info,
+                code: "RDP_RESIZE_RETRY",
+                message: "The desktop layout update is being retried.",
+                metrics: metrics,
+                fields: ["attempt": .number(Double(self.adaptiveRetryCount))]
+            )
+            self.scheduleAdaptiveResize(immediate: true)
+        }
+    }
+
+    private func updateRemoteSizeLabel() {
+        guard lastRemoteFrameWidth > 0, lastRemoteFrameHeight > 0 else {
+            remoteSizeLabel.stringValue = ""
+            remoteSizeLabel.isHidden = true
+            return
+        }
+        if let requested = requestedAdaptiveMetrics,
+           (requested.width != lastRemoteFrameWidth || requested.height != lastRemoteFrameHeight) {
+            remoteSizeLabel.stringValue = "\(lastRemoteFrameWidth)x\(lastRemoteFrameHeight) > \(requested.width)x\(requested.height)"
+        } else {
+            remoteSizeLabel.stringValue = "\(lastRemoteFrameWidth)x\(lastRemoteFrameHeight)"
+        }
+        remoteSizeLabel.isHidden = false
+    }
+
+    private func recordAdaptiveDisplayEvent(
+        level: DiagnosticLevel,
+        code: String,
+        message: String,
+        metrics: AdaptiveDesktopMetrics? = nil,
+        fields extraFields: [String: DiagnosticValue] = [:]
+    ) {
+        var fields = extraFields
+        fields["sessionID"] = .privateText(sessionID.uuidString)
+        if let metrics {
+            fields["requestedWidth"] = .number(Double(metrics.width))
+            fields["requestedHeight"] = .number(Double(metrics.height))
+            fields["desktopScaleFactor"] = .number(Double(metrics.desktopScaleFactor))
+        }
+        Task {
+            await diagnostics.record(DiagnosticEvent(
+                level: level,
+                category: .rdp,
+                code: code,
+                message: message,
+                fields: fields
+            ))
         }
     }
 

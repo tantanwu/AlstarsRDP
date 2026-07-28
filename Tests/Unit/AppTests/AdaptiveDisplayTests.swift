@@ -79,7 +79,42 @@ final class AdaptiveDisplayTests: XCTestCase {
             XCTAssertTrue(window.collectionBehavior.contains(.fullScreenPrimary))
             XCTAssertFalse(window.styleMask.contains(.fullScreen))
             XCTAssertTrue(window.styleMask.contains(.resizable))
+            window.contentView?.layoutSubtreeIfNeeded()
+
+            let buttons = window.contentView?.allDescendants(ofType: NSButton.self) ?? []
+            let disconnect = buttons.first {
+                $0.toolTip == NSLocalizedString("Disconnect", comment: "disconnect")
+            }
+            let fullScreen = buttons.first {
+                $0.toolTip == NSLocalizedString("Toggle Full Screen", comment: "full screen")
+            }
+            XCTAssertNotNil(disconnect?.image)
+            XCTAssertNotNil(fullScreen?.image)
+            XCTAssertTrue(disconnect?.image?.isValid == true)
+            XCTAssertTrue(fullScreen?.image?.isValid == true)
+            XCTAssertGreaterThan(disconnect?.image?.size.width ?? 0, 0)
+            XCTAssertGreaterThan(fullScreen?.image?.size.width ?? 0, 0)
+            XCTAssertEqual(disconnect?.frame.size, NSSize(width: 28, height: 28))
+            XCTAssertEqual(fullScreen?.frame.size, NSSize(width: 28, height: 28))
+
+            controller.windowWillEnterFullScreen(Notification(name: NSWindow.willEnterFullScreenNotification))
+            window.contentView?.layoutSubtreeIfNeeded()
+            let toolbarContainer = window.contentView?.allDescendants(ofType: SessionToolbarContainer.self).first
+            XCTAssertEqual(toolbarContainer?.frame.height, 8)
+            XCTAssertEqual(toolbarContainer?.frame.width, 72)
+
+            toolbarContainer?.onHoverChanged?(true)
+            window.contentView?.layoutSubtreeIfNeeded()
+            XCTAssertEqual(toolbarContainer?.frame.height, 42)
+            XCTAssertEqual(toolbarContainer?.frame.width, 336)
         }
+    }
+}
+
+private extension NSView {
+    func allDescendants<T: NSView>(ofType type: T.Type) -> [T] {
+        let direct = subviews.compactMap { $0 as? T }
+        return direct + subviews.flatMap { $0.allDescendants(ofType: type) }
     }
 }
 
