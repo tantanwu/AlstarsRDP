@@ -2,19 +2,20 @@ import AppKit
 import XCTest
 @testable import RemoteDesktop
 
-@MainActor
 final class ApplicationLifecycleTests: XCTestCase {
-    func testApplicationInstallsDelegateAndShowsMainWindow() {
-        XCTAssertTrue(NSApp.delegate is AppDelegate)
+    func testApplicationInstallsDelegateAndShowsMainWindow() async {
+        await MainActor.run {
+            XCTAssertTrue(NSApp.delegate is AppDelegate)
 
-        let mainWindows = NSApp.windows.filter {
-            $0.windowController is ConnectionLibraryWindowController
+            let mainWindows = NSApp.windows.filter {
+                $0.windowController is ConnectionLibraryWindowController
+            }
+            XCTAssertEqual(mainWindows.count, 1)
+            guard let mainWindow = mainWindows.first else {
+                XCTFail("The connection library window was not created")
+                return
+            }
+            XCTAssertTrue(mainWindow.isVisible)
         }
-        XCTAssertEqual(mainWindows.count, 1)
-        guard let mainWindow = mainWindows.first else {
-            XCTFail("The connection library window was not created")
-            return
-        }
-        XCTAssertTrue(mainWindow.isVisible)
     }
 }
