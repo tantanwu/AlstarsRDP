@@ -771,7 +771,7 @@ RemoteDesktop/
 | BUG-007 | P1 | 路径测试成功，但通过 SOCKS5/HTTP CONNECT 启动完整 RDP 会话仍失败 | 第一根因是 loopback 地址污染 NLA/SPN 身份；修复后真机原生日志进一步定位到第二根因：`newConnectionHandler` 在 accepted `NWConnection` 启动并进入 `.ready` 前立即取消 listener，导致 FreeRDP 对 loopback 的非阻塞 connect 被提前拆除 | 保持 `ServerHostname=127.0.0.1`、原始主机写入 `UserSpecifiedServerName`/`CertificateName`；listener 延长到首个 downstream socket 达到 `.ready` 后再取消；增加身份映射、真实 TCP 双向 relay、单连接和停止/重启回归测试 | 已修复；SOCKS5 完整会话由用户真机确认成功，HTTP CONNECT 首帧待单独验收 |
 | BUG-008 | P1 | 修改分辨率后无法保存，重新打开仍为旧值 | 宽高继续使用 `NSTextField.integerValue` 和 clamping 转换，未采用端口修复后的严格无分组字符串路径 | 加载使用无分组十进制字符串；保存严格拒绝分组、小数、负数、空值、越界和超像素上限输入；增加解析回归测试 | 已修复；CI 通过，macOS 11 真机保存、关闭并重开编辑器验证通过 |
 | BUG-009 | P2 | 打开设置或连接时，Keychain 授权查询可能阻塞 AppKit 主线程 | 同步 `SecItemCopyMatching` 从主 actor 调用 | 通过 `Task.detached` 后台读取，主线程仅消费结果；增加线程回归测试 | 已修复；双架构 CI 与 macOS 11 后台线程测试通过 |
-| BUG-010 | P1 | 分辨率设置不直观，远程窗口不能进入全屏，“动态分辨率”不会随本地窗口变化 | 配置只在连接前设置 `DynamicResolutionUpdate` 布尔值，没有接入 Display Control 通道、发送 Monitor Layout 更新或监听窗口事件；创建窗口时错误地预置 `.fullScreen` 状态位，且没有标准全屏菜单行为 | 接入 RDPEDISP Display Control；按画布 backing pixels、DPI 和协议边界计算尺寸，拖动去抖并在屏幕/全屏变化后立即同步；改用 `.fullScreenPrimary` 和标准快捷键；显示设置增加常用分辨率与“跟随窗口”模式 | 修复已编码，待双架构 CI 与 macOS 11 真机验收 |
+| BUG-010 | P1 | 分辨率设置不直观，远程窗口不能进入全屏，“动态分辨率”不会随本地窗口变化 | 配置只在连接前设置 `DynamicResolutionUpdate` 布尔值，没有接入 Display Control 通道、发送 Monitor Layout 更新或监听窗口事件；创建窗口时错误地预置 `.fullScreen` 状态位，且没有标准全屏菜单行为 | 接入 RDPEDISP Display Control；按画布 backing pixels、DPI 和协议边界计算尺寸，拖动去抖并在屏幕/全屏变化后立即同步；改用 `.fullScreenPrimary` 和标准快捷键；显示设置增加常用分辨率与“跟随窗口”模式 | 代码、双架构 CI、Universal 2 产物和 macOS 11 启动验证已完成；真实 RDP 窗口拖动与全屏效果待用户验收 |
 
 ### 14.3.4 代理与空白会话修复证据
 
@@ -818,7 +818,11 @@ RemoteDesktop/
 - 自适应策略：动态模式连接前使用当前画布 backing pixels 作为初始桌面；Retina backing scale 映射到 DesktopScaleFactor；宽度取偶数，单边限制在 RDPEDISP 的 200–8192 范围，总像素不超过 64 Mi；窗口拖动使用 500 ms 去抖，拖动结束、屏幕变化、backing scale 变化以及进入/退出全屏立即同步。同步任务使用单调代次避免取消竞态，Display Control 通道重新激活后强制重发当前布局。
 - 设置体验：显示模式区分“缩放固定分辨率”“固定分辨率原始大小”“跟随窗口”；固定模式提供 1280x720 至 3840x2160 常见预设和自定义输入；跟随窗口时禁用无效的固定宽高输入，保存不再被失效输入阻断。
 - 全屏修复：创建窗口时不再预置 `.fullScreen` 状态位，改用 `.fullScreenPrimary` 原生行为；工具栏按钮与“窗口”菜单均调用 `toggleFullScreen`，并提供 Control-Command-F。
-- 待验收：双架构 Swift/Objective-C++/AppKit 测试；macOS 11 Intel 上固定模式、窗口拖动、Retina/非 Retina 屏幕切换、全屏进入/退出和远端实际分辨率变化。
+- 竞态修复：Display Control 通道重新激活时清除旧布局缓存并强制重发；自适应任务使用单调代次，防止被取消的旧任务覆盖新任务状态。全屏快捷键在安装 `windowsMenu` 后设置，避免新版 AppKit 自动改写。
+- CI 证据：提交 `8c5813e` 的 GitHub Actions `30375985139` 全绿；arm64/x86_64 Swift 测试、arm64/x86_64 FreeRDP、Universal 2 Release 构建以及 118 项 AppKit/桥接/渲染测试全部通过。
+- 产物证据：GitHub artifact `AlstarsRDP-macOS11-Universal2-unsigned` SHA-256 为 `d89c440cfea549fa1921a50da5e4d315c3458710243073e25c831b8b2831fb1d`，内部应用压缩包 SHA-256 为 `78819c629a6d7fa41cd1a021f73a195ff333cde44712186955143d6838805ba7`。严格 codesign 校验通过，主程序同时包含 x86_64/arm64，两个 slice 的最低系统均为 macOS 11.0。
+- macOS 11 部署：新产物部署到 `/Users/jerry/AlstarsRDP-validation/run-30375985139/unpacked/RemoteDesktop.app`，在 macOS 11.7.10 Intel 真机成功启动且统一日志无应用错误；未覆盖上一可用版本。
+- 待用户验收：选择“跟随窗口”后连接真实 Windows，确认窗口拖动、进入/退出全屏时远端实际分辨率变化；如有 Retina/非 Retina 双屏，确认跨屏后 DPI 与分辨率同步；HTTP CONNECT 首帧仍按 BUG-007 单独验收。
 
 ### 14.4 每周状态模板
 
