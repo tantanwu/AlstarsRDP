@@ -38,6 +38,12 @@
 "Fit window" = "适应窗口";
 "Actual size" = "实际大小";
 "Dynamic resolution" = "动态分辨率";
+"Fit fixed resolution" = "缩放固定分辨率";
+"Actual-size fixed resolution" = "固定分辨率原始大小";
+"Follow window" = "跟随窗口";
+"Display mode" = "显示模式";
+"Resolution" = "分辨率";
+"Custom" = "自定义";
 "Use all displays" = "使用所有显示器";
 "Mac shortcuts first" = "优先使用 Mac 快捷键";
 "Windows shortcuts first" = "优先使用 Windows 快捷键";
@@ -138,6 +144,7 @@
 "Allow automatic reconnect" = "允许自动重连";
 "Default reconnect attempts" = "默认重连次数";
 "Default display scaling" = "默认显示缩放";
+"Default display mode" = "默认显示模式";
 "Default redirection policy" = "默认重定向策略";
 "Secure" = "安全";
 "Standard" = "标准";

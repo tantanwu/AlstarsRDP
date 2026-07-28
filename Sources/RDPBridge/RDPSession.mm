@@ -8,10 +8,13 @@
 
 #include <freerdp/client.h>
 #include <freerdp/addin.h>
+#include <freerdp/channels/disp.h>
 #include <freerdp/client/channels.h>
+#include <freerdp/client/disp.h>
 #include <freerdp/client/cmdline.h>
 #include <freerdp/codec/color.h>
 #include <freerdp/freerdp.h>
+#include <freerdp/event.h>
 #include <freerdp/gdi/gdi.h>
 #include <freerdp/input.h>
 #include <freerdp/scancode.h>
@@ -50,6 +53,8 @@
         _password = @"";
         _desktopWidth = 1920;
         _desktopHeight = 1080;
+        _desktopScaleFactor = 100;
+        _deviceScaleFactor = 100;
         _dynamicResolution = YES;
         _redirectClipboard = YES;
         _audioPlayback = YES;
@@ -79,6 +84,8 @@
     copy.password = self.password;
     copy.desktopWidth = self.desktopWidth;
     copy.desktopHeight = self.desktopHeight;
+    copy.desktopScaleFactor = self.desktopScaleFactor;
+    copy.deviceScaleFactor = self.deviceScaleFactor;
     copy.dynamicResolution = self.dynamicResolution;
     copy.redirectClipboard = self.redirectClipboard;
     copy.audioPlayback = self.audioPlayback;
@@ -103,6 +110,12 @@ typedef struct {
     rdpContext context;
     __unsafe_unretained RDPSession *owner;
     BOOL gdiInitialized;
+    BOOL channelEventsSubscribed;
+    DispClientContext *displayControl;
+    BOOL displayControlActivated;
+    UINT32 maxNumMonitors;
+    UINT32 maxMonitorAreaFactorA;
+    UINT32 maxMonitorAreaFactorB;
 } RDPAppContext;
 
 @interface RDPSession () {
@@ -131,6 +144,15 @@ typedef struct {
 - (void)publishFrameFromContext:(RDPAppContext *)context;
 - (void)deliverPendingFrame;
 - (void)clearPendingFrame;
+- (void)displayControlConnected:(DispClientContext *)displayControl
+                         context:(RDPAppContext *)context;
+- (void)displayControlDisconnected:(DispClientContext *)displayControl
+                            context:(RDPAppContext *)context;
+- (void)displayControlActivated:(DispClientContext *)displayControl
+                        context:(RDPAppContext *)context
+                 maxNumMonitors:(UINT32)maxNumMonitors
+          maxMonitorAreaFactorA:(UINT32)maxMonitorAreaFactorA
+          maxMonitorAreaFactorB:(UINT32)maxMonitorAreaFactorB;
 - (void)captureFailureDetailsForInstance:(freerdp *)instance
                                errorCode:(uint32_t)errorCode
                          systemErrorCode:(uint32_t)systemErrorCode
@@ -175,6 +197,43 @@ static RDPAppContext *RDPContextFromInstance(freerdp *instance) {
     return instance && instance->context ? reinterpret_cast<RDPAppContext *>(instance->context) : nullptr;
 }
 
+static UINT RDPDisplayControlCaps(DispClientContext *displayControl, UINT32 maxNumMonitors,
+                                  UINT32 maxMonitorAreaFactorA,
+                                  UINT32 maxMonitorAreaFactorB) {
+    if (!displayControl || !displayControl->custom) return CHANNEL_RC_BAD_CHANNEL;
+    RDPAppContext *context = static_cast<RDPAppContext *>(displayControl->custom);
+    RDPSession *owner = context->owner;
+    if (!owner) return CHANNEL_RC_BAD_CHANNEL;
+    [owner displayControlActivated:displayControl
+                           context:context
+                    maxNumMonitors:maxNumMonitors
+             maxMonitorAreaFactorA:maxMonitorAreaFactorA
+             maxMonitorAreaFactorB:maxMonitorAreaFactorB];
+    return CHANNEL_RC_OK;
+}
+
+static void RDPChannelConnected(void *contextValue, const ChannelConnectedEventArgs *event) {
+    if (!contextValue || !event || !event->name || !event->pInterface ||
+        strcmp(event->name, DISP_DVC_CHANNEL_NAME) != 0) return;
+    RDPAppContext *context = static_cast<RDPAppContext *>(contextValue);
+    RDPSession *owner = context->owner;
+    if (owner) {
+        [owner displayControlConnected:static_cast<DispClientContext *>(event->pInterface)
+                               context:context];
+    }
+}
+
+static void RDPChannelDisconnected(void *contextValue, const ChannelDisconnectedEventArgs *event) {
+    if (!contextValue || !event || !event->name || !event->pInterface ||
+        strcmp(event->name, DISP_DVC_CHANNEL_NAME) != 0) return;
+    RDPAppContext *context = static_cast<RDPAppContext *>(contextValue);
+    RDPSession *owner = context->owner;
+    if (owner) {
+        [owner displayControlDisconnected:static_cast<DispClientContext *>(event->pInterface)
+                                  context:context];
+    }
+}
+
 static BOOL RDPContextNew(freerdp *instance, rdpContext *context) {
     if (!instance || !context) return FALSE;
     RDPAppContext *appContext = reinterpret_cast<RDPAppContext *>(context);
@@ -187,6 +246,12 @@ static void RDPContextFree(freerdp *instance, rdpContext *context) {
     WINPR_UNUSED(instance);
     if (!context) return;
     RDPAppContext *appContext = reinterpret_cast<RDPAppContext *>(context);
+    if (appContext->channelEventsSubscribed && context->pubSub) {
+        PubSub_UnsubscribeChannelConnected(context->pubSub, RDPChannelConnected);
+        PubSub_UnsubscribeChannelDisconnected(context->pubSub, RDPChannelDisconnected);
+    }
+    appContext->displayControl = nullptr;
+    appContext->displayControlActivated = NO;
     appContext->owner = nil;
 }
 
@@ -217,6 +282,17 @@ static int RDPAddinProviderRegistrationStatus = -1;
 
 static BOOL RDPPreConnect(freerdp *instance) {
     if (!instance || !instance->context || !instance->context->settings || !instance->context->update) return FALSE;
+    RDPAppContext *appContext = RDPContextFromInstance(instance);
+    if (!appContext || !instance->context->pubSub) return FALSE;
+    if (!appContext->channelEventsSubscribed) {
+        if (PubSub_SubscribeChannelConnected(instance->context->pubSub, RDPChannelConnected) < 0)
+            return FALSE;
+        if (PubSub_SubscribeChannelDisconnected(instance->context->pubSub, RDPChannelDisconnected) < 0) {
+            PubSub_UnsubscribeChannelConnected(instance->context->pubSub, RDPChannelConnected);
+            return FALSE;
+        }
+        appContext->channelEventsSubscribed = YES;
+    }
     rdpSettings *settings = instance->context->settings;
     if (!freerdp_settings_set_bool(settings, FreeRDP_CertificateCallbackPreferPEM, TRUE) ||
         !freerdp_settings_set_uint32(settings, FreeRDP_OsMajorType, OSMAJORTYPE_MACINTOSH) ||
@@ -315,6 +391,8 @@ static BOOL RDPConfigureSettings(rdpSettings *settings, RDPConnectionConfigurati
               RDPSetString(settings, FreeRDP_Password, configuration.password) &&
               freerdp_settings_set_uint32(settings, FreeRDP_DesktopWidth, configuration.desktopWidth) &&
               freerdp_settings_set_uint32(settings, FreeRDP_DesktopHeight, configuration.desktopHeight) &&
+              freerdp_settings_set_uint32(settings, FreeRDP_DesktopScaleFactor, configuration.desktopScaleFactor) &&
+              freerdp_settings_set_uint32(settings, FreeRDP_DeviceScaleFactor, configuration.deviceScaleFactor) &&
               freerdp_settings_set_bool(settings, FreeRDP_NlaSecurity, TRUE) &&
               freerdp_settings_set_bool(settings, FreeRDP_TlsSecurity, TRUE) &&
               freerdp_settings_set_bool(settings, FreeRDP_RdpSecurity, FALSE) &&
@@ -509,6 +587,112 @@ static bool RDPStateCanTransition(RDPNativeSessionState from, RDPNativeSessionSt
     [self publishState:RDPNativeSessionStateDisconnecting errorCode:0];
     std::lock_guard<std::mutex> guard(_instanceMutex);
     if (_instance && _instance->context) freerdp_abort_connect_context(_instance->context);
+}
+
+- (void)displayControlConnected:(DispClientContext *)displayControl
+                         context:(RDPAppContext *)context {
+    if (!displayControl || !_configuration.dynamicResolution) return;
+    std::lock_guard<std::mutex> guard(_instanceMutex);
+    if (!context) return;
+    context->displayControl = displayControl;
+    context->displayControlActivated = NO;
+    context->maxNumMonitors = 0;
+    context->maxMonitorAreaFactorA = 0;
+    context->maxMonitorAreaFactorB = 0;
+    displayControl->custom = context;
+    displayControl->DisplayControlCaps = RDPDisplayControlCaps;
+}
+
+- (void)displayControlDisconnected:(DispClientContext *)displayControl
+                            context:(RDPAppContext *)context {
+    if (!displayControl) return;
+    std::lock_guard<std::mutex> guard(_instanceMutex);
+    if (!context || context->displayControl != displayControl) return;
+    if (displayControl->custom == context) {
+        displayControl->DisplayControlCaps = nullptr;
+        displayControl->custom = nullptr;
+    }
+    context->displayControl = nullptr;
+    context->displayControlActivated = NO;
+}
+
+- (void)displayControlActivated:(DispClientContext *)displayControl
+                        context:(RDPAppContext *)context
+                 maxNumMonitors:(UINT32)maxNumMonitors
+          maxMonitorAreaFactorA:(UINT32)maxMonitorAreaFactorA
+          maxMonitorAreaFactorB:(UINT32)maxMonitorAreaFactorB {
+    BOOL shouldNotify = NO;
+    {
+        std::lock_guard<std::mutex> guard(_instanceMutex);
+        if (!context || context->displayControl != displayControl) return;
+        shouldNotify = !context->displayControlActivated;
+        context->displayControlActivated = YES;
+        context->maxNumMonitors = maxNumMonitors;
+        context->maxMonitorAreaFactorA = maxMonitorAreaFactorA;
+        context->maxMonitorAreaFactorB = maxMonitorAreaFactorB;
+    }
+    if (!shouldNotify) return;
+    id<RDPSessionDelegate> delegate = self.delegate;
+    if (!delegate) return;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (self.delegate == delegate) [delegate sessionDidActivateDisplayControl:self];
+    });
+}
+
+- (BOOL)requestDesktopResizeToWidth:(uint32_t)width
+                             height:(uint32_t)height
+                 desktopScaleFactor:(uint32_t)desktopScaleFactor
+                  deviceScaleFactor:(uint32_t)deviceScaleFactor
+                      physicalWidth:(uint32_t)physicalWidth
+                     physicalHeight:(uint32_t)physicalHeight {
+    if (!_configuration.dynamicResolution || width < DISPLAY_CONTROL_MIN_MONITOR_WIDTH ||
+        width > DISPLAY_CONTROL_MAX_MONITOR_WIDTH || (width % 2) != 0 ||
+        height < DISPLAY_CONTROL_MIN_MONITOR_HEIGHT ||
+        height > DISPLAY_CONTROL_MAX_MONITOR_HEIGHT ||
+        physicalWidth < DISPLAY_CONTROL_MIN_PHYSICAL_MONITOR_WIDTH ||
+        physicalWidth > DISPLAY_CONTROL_MAX_PHYSICAL_MONITOR_WIDTH ||
+        physicalHeight < DISPLAY_CONTROL_MIN_PHYSICAL_MONITOR_HEIGHT ||
+        physicalHeight > DISPLAY_CONTROL_MAX_PHYSICAL_MONITOR_HEIGHT ||
+        desktopScaleFactor < 100 || desktopScaleFactor > 500 ||
+        (deviceScaleFactor != 100 && deviceScaleFactor != 140 && deviceScaleFactor != 180)) {
+        return NO;
+    }
+
+    std::lock_guard<std::mutex> guard(_instanceMutex);
+    if (_nativeState.load() != RDPNativeSessionStateConnected) return NO;
+    RDPAppContext *context = RDPContextFromInstance(_instance);
+    if (!context || !context->displayControlActivated || context->maxNumMonitors < 1 ||
+        !context->displayControl || !context->displayControl->SendMonitorLayout) return NO;
+    if (context->maxMonitorAreaFactorA > 0 && context->maxMonitorAreaFactorB > 0) {
+        const uint64_t maximumArea = static_cast<uint64_t>(context->maxMonitorAreaFactorA) *
+                                     static_cast<uint64_t>(context->maxMonitorAreaFactorB);
+        if (static_cast<uint64_t>(width) * static_cast<uint64_t>(height) > maximumArea) return NO;
+    }
+
+    DISPLAY_CONTROL_MONITOR_LAYOUT layout = {};
+    layout.Flags = DISPLAY_CONTROL_MONITOR_PRIMARY;
+    layout.Left = 0;
+    layout.Top = 0;
+    layout.Width = width;
+    layout.Height = height;
+    layout.PhysicalWidth = physicalWidth;
+    layout.PhysicalHeight = physicalHeight;
+    layout.Orientation = ORIENTATION_LANDSCAPE;
+    layout.DesktopScaleFactor = desktopScaleFactor;
+    layout.DeviceScaleFactor = deviceScaleFactor;
+    const UINT status = context->displayControl->SendMonitorLayout(
+        context->displayControl, 1, &layout
+    );
+    if (status != CHANNEL_RC_OK) return NO;
+
+    rdpSettings *settings = _instance && _instance->context ? _instance->context->settings : nullptr;
+    if (settings) {
+        (void)freerdp_settings_set_uint32(settings, FreeRDP_DesktopWidth, width);
+        (void)freerdp_settings_set_uint32(settings, FreeRDP_DesktopHeight, height);
+        (void)freerdp_settings_set_uint32(settings, FreeRDP_DesktopScaleFactor, desktopScaleFactor);
+        (void)freerdp_settings_set_uint32(settings, FreeRDP_DeviceScaleFactor, deviceScaleFactor);
+    }
+    return YES;
 }
 
 - (void)publishState:(RDPNativeSessionState)state errorCode:(uint32_t)errorCode {

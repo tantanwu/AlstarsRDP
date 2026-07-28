@@ -30,9 +30,9 @@ final class SettingsWindowController: NSWindowController {
     private func buildInterface() {
         guard let content = window?.contentView else { return }
         scalePopup.addItems(withTitles: [
-            NSLocalizedString("Fit window", comment: "fit"),
-            NSLocalizedString("Actual size", comment: "actual"),
-            NSLocalizedString("Dynamic resolution", comment: "dynamic")
+            NSLocalizedString("Fit fixed resolution", comment: "fit fixed resolution"),
+            NSLocalizedString("Actual-size fixed resolution", comment: "actual fixed resolution"),
+            NSLocalizedString("Follow window", comment: "dynamic resolution")
         ])
         redirectionPopup.addItems(withTitles: [
             NSLocalizedString("Secure", comment: "secure preset"),
@@ -42,7 +42,7 @@ final class SettingsWindowController: NSWindowController {
         let rows = NSStackView(views: [
             reconnectButton,
             row(NSLocalizedString("Default reconnect attempts", comment: "default reconnect attempts"), attemptsField),
-            row(NSLocalizedString("Default display scaling", comment: "default scaling"), scalePopup),
+            row(NSLocalizedString("Default display mode", comment: "default display mode"), scalePopup),
             row(NSLocalizedString("Default redirection policy", comment: "default redirection"), redirectionPopup)
         ])
         rows.orientation = .vertical

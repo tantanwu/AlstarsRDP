@@ -120,6 +120,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let windowMenu = NSMenu(title: NSLocalizedString("Window", comment: "window menu"))
         windowMenu.addItem(withTitle: NSLocalizedString("Minimize", comment: "minimize"), action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
         windowMenu.addItem(withTitle: NSLocalizedString("Zoom", comment: "zoom"), action: #selector(NSWindow.performZoom(_:)), keyEquivalent: "")
+        let fullScreen = windowMenu.addItem(
+            withTitle: NSLocalizedString("Toggle Full Screen", comment: "full screen"),
+            action: #selector(NSWindow.toggleFullScreen(_:)),
+            keyEquivalent: "f"
+        )
+        fullScreen.keyEquivalentModifierMask = [.control, .command]
         windowMenu.addItem(.separator())
         windowMenu.addItem(withTitle: NSLocalizedString("Bring All to Front", comment: "bring front"), action: #selector(NSApplication.arrangeInFront(_:)), keyEquivalent: "")
         windowItem.submenu = windowMenu

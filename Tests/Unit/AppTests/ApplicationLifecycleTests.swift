@@ -16,6 +16,12 @@ final class ApplicationLifecycleTests: XCTestCase {
                 return
             }
             XCTAssertTrue(mainWindow.isVisible)
+
+            let fullScreenItem = NSApp.windowsMenu?.items.first {
+                $0.action == #selector(NSWindow.toggleFullScreen(_:))
+            }
+            XCTAssertEqual(fullScreenItem?.keyEquivalent, "f")
+            XCTAssertEqual(fullScreenItem?.keyEquivalentModifierMask, [.control, .command])
         }
     }
 }

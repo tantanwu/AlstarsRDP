@@ -5,6 +5,52 @@ import XCTest
 @testable import RemoteDesktop
 
 final class ProfileEditorLayoutTests: XCTestCase {
+    func testDisplayModeControlsResolutionEditing() async {
+        await MainActor.run {
+            let profile = ConnectionProfile(
+                name: "Test",
+                target: TargetIdentity(endpoint: Endpoint(host: "rdp.example", port: 3389)),
+                display: DisplayConfiguration(scaleMode: .dynamicResolution)
+            )
+            let controller = ProfileEditorWindowController(
+                profile: profile,
+                credentialStore: EmptyCredentialStore()
+            )
+            guard let content = controller.window?.contentView,
+                  let tabView = content.firstDescendant(ofType: NSTabView.self),
+                  let displayView = tabView.tabViewItem(at: 1).view else {
+                XCTFail("The Display tab was not created")
+                return
+            }
+            let popups = displayView.descendants(ofType: NSPopUpButton.self)
+            guard let mode = popups.first(where: {
+                      $0.itemTitles.contains(NSLocalizedString("Follow window", comment: "dynamic resolution"))
+                  }),
+                  let resolution = popups.first(where: {
+                      $0.itemTitles.contains(NSLocalizedString("Custom", comment: "custom resolution"))
+                  }) else {
+                XCTFail("The adaptive display controls were not created")
+                return
+            }
+            let fields = displayView.descendants(ofType: NSTextField.self).filter(\.isEditable)
+            XCTAssertEqual(fields.count, 2)
+            XCTAssertFalse(resolution.isEnabled)
+            XCTAssertTrue(fields.allSatisfy { !$0.isEnabled })
+
+            mode.selectItem(at: 0)
+            _ = NSApp.sendAction(mode.action!, to: mode.target, from: mode)
+            resolution.selectItem(at: DisplayResolutionPreset.common.count)
+            _ = NSApp.sendAction(resolution.action!, to: resolution.target, from: resolution)
+            XCTAssertTrue(resolution.isEnabled)
+            XCTAssertTrue(fields.allSatisfy(\.isEnabled))
+
+            resolution.selectItem(at: 3)
+            _ = NSApp.sendAction(resolution.action!, to: resolution.target, from: resolution)
+            XCTAssertEqual(Set(fields.map(\.stringValue)), Set(["1920", "1080"]))
+            XCTAssertTrue(fields.allSatisfy { !$0.isEnabled })
+        }
+    }
+
     func testRouteTestButtonTitleChangesDoNotMoveNetworkContent() async {
         await MainActor.run {
             let profile = ConnectionProfile(

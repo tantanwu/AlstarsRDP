@@ -768,9 +768,10 @@ RemoteDesktop/
 | BUG-004 | P1 | Direct 连接持续失败并显示 `0x00020001` | 自建 `freerdp_new`/`freerdp_context_new` 路径在加载静态通道前未执行官方客户端路径的 `freerdp_register_addin_provider`，导致 PreConnect 在网络、TLS/NLA 和认证前失败 | `74d6ac4` 在 PreConnect 加载 add-ins 前线程安全注册 `freerdp_channels_load_static_addin_entry`；增加分阶段错误摘要和分类测试 | 代码与 CI 已修复，待 macOS 11 真机连接/首帧复验 |
 | BUG-005 | P2 | 设置页每次测试连接后，Network 页文字向右下角累计移动 | `NSTabViewItem` 直接承载带 `edgeInsets` 的可变尺寸 `NSStackView`，测试按钮标题变化和 sheet 关闭反复触发 tab 内容重排 | `74d6ac4` 使用稳定容器和顶部/左侧 Auto Layout 约束，固定测试按钮 alignment width；`7e7a9d9` 增加连续标题变化的 AppKit 坐标稳定性测试 | 已修复并通过 CI，待 macOS 11 真机连续点击复验 |
 | BUG-006 | P1 | 连接真实 Windows 目标时持续显示 `0x0002000D` | 静态 OpenSSL 3 构建未携带 legacy provider；NLA/NTLM 初始化 MD4 时失败并返回 `SEC_E_NO_CREDENTIALS`，外层再覆盖为通用连接错误 | `848396c` 构建 WinPR 内置 MD4/RC4；CI `30332296837` 双架构通过；macOS 11 Intel 已完成 Direct TLS/NLA 并显示真实首帧 | 已修复并完成 Direct 真机验收 |
-| BUG-007 | P1 | 路径测试成功，但通过 SOCKS5/HTTP CONNECT 启动完整 RDP 会话仍失败 | 第一根因是 loopback 地址污染 NLA/SPN 身份；修复后真机原生日志进一步定位到第二根因：`newConnectionHandler` 在 accepted `NWConnection` 启动并进入 `.ready` 前立即取消 listener，导致 FreeRDP 对 loopback 的非阻塞 connect 被提前拆除 | 保持 `ServerHostname=127.0.0.1`、原始主机写入 `UserSpecifiedServerName`/`CertificateName`；listener 延长到首个 downstream socket 达到 `.ready` 后再取消；增加身份映射、真实 TCP 双向 relay、单连接和停止/重启回归测试 | 两层修复均已通过双架构 CI 并部署 macOS 11；完整 SOCKS5/HTTP CONNECT 首帧待 Keychain 人工授权后验收 |
+| BUG-007 | P1 | 路径测试成功，但通过 SOCKS5/HTTP CONNECT 启动完整 RDP 会话仍失败 | 第一根因是 loopback 地址污染 NLA/SPN 身份；修复后真机原生日志进一步定位到第二根因：`newConnectionHandler` 在 accepted `NWConnection` 启动并进入 `.ready` 前立即取消 listener，导致 FreeRDP 对 loopback 的非阻塞 connect 被提前拆除 | 保持 `ServerHostname=127.0.0.1`、原始主机写入 `UserSpecifiedServerName`/`CertificateName`；listener 延长到首个 downstream socket 达到 `.ready` 后再取消；增加身份映射、真实 TCP 双向 relay、单连接和停止/重启回归测试 | 已修复；SOCKS5 完整会话由用户真机确认成功，HTTP CONNECT 首帧待单独验收 |
 | BUG-008 | P1 | 修改分辨率后无法保存，重新打开仍为旧值 | 宽高继续使用 `NSTextField.integerValue` 和 clamping 转换，未采用端口修复后的严格无分组字符串路径 | 加载使用无分组十进制字符串；保存严格拒绝分组、小数、负数、空值、越界和超像素上限输入；增加解析回归测试 | 已修复；CI 通过，macOS 11 真机保存、关闭并重开编辑器验证通过 |
 | BUG-009 | P2 | 打开设置或连接时，Keychain 授权查询可能阻塞 AppKit 主线程 | 同步 `SecItemCopyMatching` 从主 actor 调用 | 通过 `Task.detached` 后台读取，主线程仅消费结果；增加线程回归测试 | 已修复；双架构 CI 与 macOS 11 后台线程测试通过 |
+| BUG-010 | P1 | 分辨率设置不直观，远程窗口不能进入全屏，“动态分辨率”不会随本地窗口变化 | 配置只在连接前设置 `DynamicResolutionUpdate` 布尔值，没有接入 Display Control 通道、发送 Monitor Layout 更新或监听窗口事件；创建窗口时错误地预置 `.fullScreen` 状态位，且没有标准全屏菜单行为 | 接入 RDPEDISP Display Control；按画布 backing pixels、DPI 和协议边界计算尺寸，拖动去抖并在屏幕/全屏变化后立即同步；改用 `.fullScreenPrimary` 和标准快捷键；显示设置增加常用分辨率与“跟随窗口”模式 | 修复已编码，待双架构 CI 与 macOS 11 真机验收 |
 
 ### 14.3.4 代理与空白会话修复证据
 
@@ -809,6 +810,15 @@ RemoteDesktop/
 - listener 自动化证据：GitHub Actions [30344220649](https://github.com/tantanwu/AlstarsRDP/actions/runs/30344220649) 全绿，新增真实 socket relay 测试在 arm64/x86_64 均通过；artifact ID `8682348091`，官方 Actions SHA-256 `194c222fea1161d23c9f3cd9a8d79c7dcee07d1a43d339a38fc2ce51c1ecfc76`，内层 ZIP SHA-256 `a81895320438a298a3f6ce07b9e1386e1e8ffc229adc53d683a8750b0874821c`。
 - listener 真机部署：新产物部署到 `/Users/jerry/AlstarsRDP-validation/run-30344220649/unpacked/RemoteDesktop.app`，通过严格 codesign、x86_64/arm64 和最低系统 11.0 检查；应用启动、现有 SOCKS5 profile 加载和会话窗口创建成功。完整首帧当前停在 macOS SecurityAgent 对目标 Keychain 项的人工授权，不读取或代填登录密码。
 - 待验收：macOS 11 Intel 上 SOCKS5、HTTP CONNECT 与 Direct 完整 RDP 首帧；连续代理路径测试布局不漂移。
+
+### 14.3.8 自适应分辨率与全屏修复
+
+- 用户验收反馈：部署运行 `30344220649` 后，SOCKS5 代理完整会话可以连接；分辨率持久化问题已消失。后续发现显示模式不够直观、会话窗口无法正常进入 macOS 全屏，且远端桌面尺寸不会随本地窗口变化。
+- 协议根因：`DynamicResolutionUpdate` 只负责请求加载 `disp` 动态虚拟通道，应用仍必须订阅 `Microsoft::Windows::RDS::DisplayControl` 的连接/断开事件，在服务器发送 Display Control Caps 后调用 `SendMonitorLayout`。旧桥接未实现该生命周期。
+- 自适应策略：动态模式连接前使用当前画布 backing pixels 作为初始桌面；Retina backing scale 映射到 DesktopScaleFactor；宽度取偶数，单边限制在 RDPEDISP 的 200–8192 范围，总像素不超过 64 Mi；窗口拖动使用 500 ms 去抖，拖动结束、屏幕变化、backing scale 变化以及进入/退出全屏立即同步。同步任务使用单调代次避免取消竞态，Display Control 通道重新激活后强制重发当前布局。
+- 设置体验：显示模式区分“缩放固定分辨率”“固定分辨率原始大小”“跟随窗口”；固定模式提供 1280x720 至 3840x2160 常见预设和自定义输入；跟随窗口时禁用无效的固定宽高输入，保存不再被失效输入阻断。
+- 全屏修复：创建窗口时不再预置 `.fullScreen` 状态位，改用 `.fullScreenPrimary` 原生行为；工具栏按钮与“窗口”菜单均调用 `toggleFullScreen`，并提供 Control-Command-F。
+- 待验收：双架构 Swift/Objective-C++/AppKit 测试；macOS 11 Intel 上固定模式、窗口拖动、Retina/非 Retina 屏幕切换、全屏进入/退出和远端实际分辨率变化。
 
 ### 14.4 每周状态模板
 

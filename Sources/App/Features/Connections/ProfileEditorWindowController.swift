@@ -27,6 +27,7 @@ final class ProfileEditorWindowController: NSWindowController {
     private let favoriteButton = NSButton(checkboxWithTitle: NSLocalizedString("Favorite", comment: "favorite"), target: nil, action: nil)
     private let widthField = NSTextField()
     private let heightField = NSTextField()
+    private let resolutionPresetPopup = NSPopUpButton()
     private let scalePopup = NSPopUpButton()
     private let allDisplaysButton = NSButton(checkboxWithTitle: NSLocalizedString("Use all displays", comment: "all displays"), target: nil, action: nil)
     private let keyboardPopup = NSPopUpButton()
@@ -109,15 +110,26 @@ final class ProfileEditorWindowController: NSWindowController {
             saveTargetCredentialButton,
             row(NSLocalizedString("Tags", comment: "tags"), tagsField), favoriteButton
         ]))
-        scalePopup.addItems(withTitles: [NSLocalizedString("Fit window", comment: "fit"), NSLocalizedString("Actual size", comment: "actual"), NSLocalizedString("Dynamic resolution", comment: "dynamic")])
+        scalePopup.addItems(withTitles: [
+            NSLocalizedString("Fit fixed resolution", comment: "fit fixed resolution"),
+            NSLocalizedString("Actual-size fixed resolution", comment: "actual fixed resolution"),
+            NSLocalizedString("Follow window", comment: "dynamic resolution")
+        ])
+        scalePopup.target = self
+        scalePopup.action = #selector(displayModeChanged)
+        resolutionPresetPopup.addItems(withTitles: DisplayResolutionPreset.common.map(\.title))
+        resolutionPresetPopup.addItem(withTitle: NSLocalizedString("Custom", comment: "custom resolution"))
+        resolutionPresetPopup.target = self
+        resolutionPresetPopup.action = #selector(resolutionPresetChanged)
         keyboardPopup.addItems(withTitles: [NSLocalizedString("Mac shortcuts first", comment: "mac keyboard"), NSLocalizedString("Windows shortcuts first", comment: "windows keyboard")])
         portField.placeholderString = "3389"
         portField.toolTip = NSLocalizedString("Enter a port between 1 and 65535 using digits only.", comment: "port input help")
         proxyPortField.toolTip = portField.toolTip
         tabView.addTabViewItem(tab(title: NSLocalizedString("Display", comment: "display"), rows: [
+            row(NSLocalizedString("Display mode", comment: "display mode"), scalePopup),
+            row(NSLocalizedString("Resolution", comment: "resolution preset"), resolutionPresetPopup),
             row(NSLocalizedString("Width", comment: "width"), widthField),
             row(NSLocalizedString("Height", comment: "height"), heightField),
-            row(NSLocalizedString("Scaling", comment: "scaling"), scalePopup),
             row(NSLocalizedString("Keyboard", comment: "keyboard"), keyboardPopup), allDisplaysButton
         ]))
         routePopup.addItems(withTitles: ["Direct", "SOCKS5", "HTTP CONNECT", "HTTPS CONNECT", "RD Gateway"] )
@@ -230,6 +242,15 @@ final class ProfileEditorWindowController: NSWindowController {
         widthField.stringValue = String(profile.display.width)
         heightField.stringValue = String(profile.display.height)
         scalePopup.selectItem(at: profile.display.scaleMode == .fit ? 0 : profile.display.scaleMode == .actualSize ? 1 : 2)
+        if let presetIndex = DisplayResolutionPreset.index(
+            width: profile.display.width,
+            height: profile.display.height
+        ) {
+            resolutionPresetPopup.selectItem(at: presetIndex)
+        } else {
+            resolutionPresetPopup.selectItem(at: DisplayResolutionPreset.common.count)
+        }
+        displayModeChanged()
         keyboardPopup.selectItem(at: profile.display.keyboardMode == .macPreferred ? 0 : 1)
         allDisplaysButton.state = profile.display.useAllDisplays ? .on : .off
         certificateNameField.stringValue = profile.target.certificateName
@@ -330,6 +351,24 @@ final class ProfileEditorWindowController: NSWindowController {
         }
     }
 
+    @objc private func displayModeChanged() {
+        let followsWindow = scalePopup.indexOfSelectedItem == 2
+        resolutionPresetPopup.isEnabled = !followsWindow
+        let customResolution = resolutionPresetPopup.indexOfSelectedItem == DisplayResolutionPreset.common.count
+        widthField.isEnabled = !followsWindow && customResolution
+        heightField.isEnabled = !followsWindow && customResolution
+    }
+
+    @objc private func resolutionPresetChanged() {
+        let index = resolutionPresetPopup.indexOfSelectedItem
+        if DisplayResolutionPreset.common.indices.contains(index) {
+            let preset = DisplayResolutionPreset.common[index]
+            widthField.stringValue = String(preset.width)
+            heightField.stringValue = String(preset.height)
+        }
+        displayModeChanged()
+    }
+
     @objc private func cancel() {
         guard !isSaving else { return }
         credentialLoadTask?.cancel()
@@ -353,10 +392,16 @@ final class ProfileEditorWindowController: NSWindowController {
             updated.usernameHint = usernameField.stringValue; updated.domainHint = domainField.stringValue
             updated.tags = tagsField.stringValue.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
             updated.isFavorite = favoriteButton.state == .on; updated.updatedAt = Date()
-            let desktopSize = try ConnectionFieldParser.desktopSize(
-                width: widthField.stringValue,
-                height: heightField.stringValue
-            )
+            let followsWindow = scalePopup.indexOfSelectedItem == 2
+            let desktopSize: (width: UInt32, height: UInt32)
+            if followsWindow {
+                desktopSize = (profile.display.width, profile.display.height)
+            } else {
+                desktopSize = try ConnectionFieldParser.desktopSize(
+                    width: widthField.stringValue,
+                    height: heightField.stringValue
+                )
+            }
             updated.display = DisplayConfiguration(
                 width: desktopSize.width,
                 height: desktopSize.height,
@@ -550,6 +595,7 @@ final class ProfileEditorWindowController: NSWindowController {
             scalePopup.selectItem(at: scaleMode == .fit ? 0 : scaleMode == .actualSize ? 1 : 2)
             scalePopup.isEnabled = false
             scalePopup.toolTip = managed
+            displayModeChanged()
         }
         if let maximumAttempts = enterprisePolicy.maximumReconnectAttempts {
             reconnectAttemptsField.integerValue = min(

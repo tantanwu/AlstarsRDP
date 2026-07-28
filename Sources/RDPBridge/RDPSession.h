@@ -33,6 +33,8 @@ typedef NS_OPTIONS(NSUInteger, RDPMouseButton) {
 @property(nonatomic, copy) NSString *password;
 @property(nonatomic) uint32_t desktopWidth;
 @property(nonatomic) uint32_t desktopHeight;
+@property(nonatomic) uint32_t desktopScaleFactor;
+@property(nonatomic) uint32_t deviceScaleFactor;
 @property(nonatomic) BOOL dynamicResolution;
 @property(nonatomic) BOOL redirectClipboard;
 @property(nonatomic) BOOL audioPlayback;
@@ -67,6 +69,8 @@ NS_SWIFT_UI_ACTOR @protocol RDPSessionDelegate <NSObject>
     NS_SWIFT_NAME(session(_:didChange:errorCode:));
 - (void)session:(RDPSession *)session didReceiveFrame:(NSData *)frame width:(uint32_t)width height:(uint32_t)height stride:(uint32_t)stride
     NS_SWIFT_NAME(session(_:didReceiveFrame:width:height:stride:));
+- (void)sessionDidActivateDisplayControl:(RDPSession *)session
+    NS_SWIFT_NAME(sessionDidActivateDisplayControl(_:));
 - (RDPCertificateDecision)session:(RDPSession *)session decideCertificate:(RDPCertificateInfo *)certificate
     NS_SWIFT_NAME(session(_:decideCertificate:));
 @end
@@ -84,6 +88,13 @@ NS_SWIFT_UI_ACTOR @protocol RDPSessionDelegate <NSObject>
 - (instancetype)init NS_UNAVAILABLE;
 - (void)start;
 - (void)disconnect;
+- (BOOL)requestDesktopResizeToWidth:(uint32_t)width
+                             height:(uint32_t)height
+                 desktopScaleFactor:(uint32_t)desktopScaleFactor
+                  deviceScaleFactor:(uint32_t)deviceScaleFactor
+                      physicalWidth:(uint32_t)physicalWidth
+                     physicalHeight:(uint32_t)physicalHeight
+    NS_SWIFT_NAME(requestDesktopResize(width:height:desktopScaleFactor:deviceScaleFactor:physicalWidth:physicalHeight:));
 - (void)sendScanCode:(uint32_t)scanCode keyDown:(BOOL)keyDown;
 - (void)sendUnicodeScalar:(uint16_t)scalar keyDown:(BOOL)keyDown;
 - (void)sendMouseAtX:(uint16_t)x y:(uint16_t)y buttons:(RDPMouseButton)buttons keyDown:(BOOL)keyDown move:(BOOL)move

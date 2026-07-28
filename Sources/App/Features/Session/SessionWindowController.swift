@@ -45,6 +45,9 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
     private var isSleeping = false
     private var pressedScanCodes = Set<UInt32>()
     private var modifierState: NSEvent.ModifierFlags = []
+    private var adaptiveResizeTask: Task<Void, Never>?
+    private var adaptiveResizeGeneration: UInt64 = 0
+    private var lastAdaptiveMetrics: AdaptiveDesktopMetrics?
 
     init(
         sessionID: UUID,
@@ -68,11 +71,12 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
         self.canvas = RemoteFrameView(scaleMode: profile.display.scaleMode)
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1180, height: 760),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullScreen],
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered, defer: false
         )
         window.title = profile.name
         window.minSize = NSSize(width: 640, height: 400)
+        window.collectionBehavior.insert(.fullScreenPrimary)
         window.acceptsMouseMovedEvents = true
         window.center()
         super.init(window: window)
@@ -136,9 +140,17 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
                 configuration.username = targetCredential.username
                 configuration.domain = targetCredential.domain
                 configuration.password = targetCredential.password
-                configuration.desktopWidth = self.profile.display.width
-                configuration.desktopHeight = self.profile.display.height
                 configuration.dynamicResolution = self.profile.display.scaleMode == .dynamicResolution
+                if configuration.dynamicResolution,
+                   let metrics = self.currentAdaptiveMetrics() {
+                    configuration.desktopWidth = metrics.width
+                    configuration.desktopHeight = metrics.height
+                    configuration.desktopScaleFactor = metrics.desktopScaleFactor
+                    configuration.deviceScaleFactor = metrics.deviceScaleFactor
+                } else {
+                    configuration.desktopWidth = self.profile.display.width
+                    configuration.desktopHeight = self.profile.display.height
+                }
                 configuration.redirectClipboard = self.profile.redirection.clipboardText || self.profile.redirection.clipboardImages || self.profile.redirection.clipboardFiles
                 configuration.audioPlayback = self.profile.redirection.audioPlayback
                 configuration.audioCapture = self.profile.redirection.microphone
@@ -365,7 +377,7 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
             startConnection()
         }
     }
-    @objc private func toggleFullScreen() { window?.toggleFullScreen(nil) }
+    @objc private func toggleFullScreen() { window?.toggleFullScreen(self) }
     @objc private func sendControlAltDelete() { session?.sendControlAltDelete() }
 
     func session(_ session: RDPSession, didChange state: RDPNativeSessionState, errorCode: UInt32) {
@@ -403,6 +415,7 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
             reconnectAttempt = 0
             showStatus(NSLocalizedString("Connected. Waiting for the remote desktop…", comment: "waiting for first frame"), busy: true)
             window?.makeFirstResponder(canvas)
+            scheduleAdaptiveResize(immediate: true)
         case .disconnecting: showStatus(NSLocalizedString("Disconnecting…", comment: "disconnecting"), busy: true)
         case .closed:
             finish(session: session)
@@ -430,6 +443,12 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
         statusOverlay.isHidden = true
     }
 
+    func sessionDidActivateDisplayControl(_ session: RDPSession) {
+        guard self.session === session else { return }
+        lastAdaptiveMetrics = nil
+        scheduleAdaptiveResize(immediate: true)
+    }
+
     func session(_ session: RDPSession, decideCertificate certificate: RDPCertificateInfo) -> RDPCertificateDecision {
         guard self.session === session, !isClosing else { return .reject }
         let alert = NSAlert()
@@ -449,6 +468,9 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
 
     func windowWillClose(_ notification: Notification) {
         isClosing = true
+        adaptiveResizeGeneration &+= 1
+        adaptiveResizeTask?.cancel()
+        adaptiveResizeTask = nil
         clearEphemeralCredentials()
         retryTask?.cancel(); retryTask = nil
         connectTask?.cancel(); connectTask = nil
@@ -456,12 +478,86 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
         onClose(sessionID)
     }
 
+    func windowDidResize(_ notification: Notification) {
+        scheduleAdaptiveResize()
+    }
+
+    func windowDidEndLiveResize(_ notification: Notification) {
+        scheduleAdaptiveResize(immediate: true)
+    }
+
+    func windowDidEnterFullScreen(_ notification: Notification) {
+        scheduleAdaptiveResize(immediate: true)
+    }
+
+    func windowDidExitFullScreen(_ notification: Notification) {
+        scheduleAdaptiveResize(immediate: true)
+    }
+
+    func windowDidChangeBackingProperties(_ notification: Notification) {
+        scheduleAdaptiveResize(immediate: true)
+    }
+
+    func windowDidChangeScreen(_ notification: Notification) {
+        scheduleAdaptiveResize(immediate: true)
+    }
+
     private func finish(session finishedSession: RDPSession) {
         guard session === finishedSession else { return }
         finishedSession.delegate = nil
         session = nil
         connectTask = nil
+        adaptiveResizeGeneration &+= 1
+        adaptiveResizeTask?.cancel()
+        adaptiveResizeTask = nil
+        lastAdaptiveMetrics = nil
         releaseConnectionResources()
+    }
+
+    private func currentAdaptiveMetrics() -> AdaptiveDesktopMetrics? {
+        window?.contentView?.layoutSubtreeIfNeeded()
+        let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 1
+        return AdaptiveDisplaySizing.metrics(
+            canvasSizeInPoints: canvas.bounds.size,
+            backingScaleFactor: scale
+        )
+    }
+
+    private func scheduleAdaptiveResize(immediate: Bool = false) {
+        guard profile.display.scaleMode == .dynamicResolution, !isClosing else { return }
+        adaptiveResizeGeneration &+= 1
+        let generation = adaptiveResizeGeneration
+        adaptiveResizeTask?.cancel()
+        adaptiveResizeTask = Task { [weak self] in
+            if !immediate {
+                do { try await Task.sleep(nanoseconds: 500_000_000) }
+                catch { return }
+            }
+            guard let self,
+                  !Task.isCancelled,
+                  self.adaptiveResizeGeneration == generation,
+                  let session = self.session,
+                  session.state == .connected,
+                  let metrics = self.currentAdaptiveMetrics(),
+                  metrics != self.lastAdaptiveMetrics else {
+                if self?.adaptiveResizeGeneration == generation {
+                    self?.adaptiveResizeTask = nil
+                }
+                return
+            }
+            let sent = session.requestDesktopResize(
+                width: metrics.width,
+                height: metrics.height,
+                desktopScaleFactor: metrics.desktopScaleFactor,
+                deviceScaleFactor: metrics.deviceScaleFactor,
+                physicalWidth: metrics.physicalWidth,
+                physicalHeight: metrics.physicalHeight
+            )
+            if sent { self.lastAdaptiveMetrics = metrics }
+            if self.adaptiveResizeGeneration == generation {
+                self.adaptiveResizeTask = nil
+            }
+        }
     }
 
     private func releaseConnectionResources() {
