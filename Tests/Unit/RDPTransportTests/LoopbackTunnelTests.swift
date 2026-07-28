@@ -55,6 +55,11 @@ final class LoopbackTunnelTests: XCTestCase {
 
         let second = try NWConnection.make(endpoint: Endpoint(host: local.host, port: local.port))
         defer { second.cancel() }
+        let rejectTimeout = Task {
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            second.cancel()
+        }
+        defer { rejectTimeout.cancel() }
         do {
             try await second.waitUntilReady(on: DispatchQueue(label: "LoopbackTunnelTests.second-client"))
             XCTFail("A one-shot tunnel accepted a second downstream connection")
