@@ -37,7 +37,7 @@ final class ProfileEditorLayoutTests: XCTestCase {
             for title in ["Cancel Test", "Test Connection", "Cancel Test", "Test Connection"] {
                 button.title = title
                 content.layoutSubtreeIfNeeded()
-                XCTAssertEqual(button.frame.width, 120, accuracy: 0.5)
+                XCTAssertEqual(button.alignmentRect(forFrame: button.frame).width, 120, accuracy: 0.5)
                 XCTAssertEqual(networkStack.frame.origin.x, initialFrame.origin.x, accuracy: 0.5)
                 XCTAssertEqual(networkStack.frame.origin.y, initialFrame.origin.y, accuracy: 0.5)
             }
