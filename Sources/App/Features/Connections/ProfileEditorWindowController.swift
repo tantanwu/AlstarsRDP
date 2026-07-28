@@ -68,6 +68,7 @@ final class ProfileEditorWindowController: NSWindowController {
     private let cancelButton = NSButton(title: NSLocalizedString("Cancel", comment: "cancel"), target: nil, action: nil)
     private let saveButton = NSButton(title: NSLocalizedString("Save", comment: "save"), target: nil, action: nil)
     private var routeTestTask: Task<Void, Never>?
+    private var credentialLoadTask: Task<Void, Never>?
     private var routeTestGeneration: UInt64 = 0
     private var loadedCredentialMaterials: [CredentialReference: CredentialMaterial] = [:]
     private var isSaving = false
@@ -90,6 +91,7 @@ final class ProfileEditorWindowController: NSWindowController {
         buildInterface()
         loadProfile()
         applyEnterprisePolicy()
+        beginCredentialPreload()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -225,7 +227,8 @@ final class ProfileEditorWindowController: NSWindowController {
         domainField.stringValue = profile.domainHint
         tagsField.stringValue = profile.tags.joined(separator: ", ")
         favoriteButton.state = profile.isFavorite ? .on : .off
-        widthField.integerValue = Int(profile.display.width); heightField.integerValue = Int(profile.display.height)
+        widthField.stringValue = String(profile.display.width)
+        heightField.stringValue = String(profile.display.height)
         scalePopup.selectItem(at: profile.display.scaleMode == .fit ? 0 : profile.display.scaleMode == .actualSize ? 1 : 2)
         keyboardPopup.selectItem(at: profile.display.keyboardMode == .macPreferred ? 0 : 1)
         allDisplaysButton.state = profile.display.useAllDisplays ? .on : .off
@@ -242,10 +245,8 @@ final class ProfileEditorWindowController: NSWindowController {
         smartCardsButton.state = profile.redirection.smartCards ? .on : .off
         redirectionPresetPopup.selectItem(at: profile.redirection.preset == .secure ? 0 : profile.redirection.preset == .standard ? 1 : 2)
         saveTargetCredentialButton.state = .on
-        if enterprisePolicy.allowsCredentialSaving, let reference = profile.credentialReference {
-            if loadCredential(reference) != nil {
-                passwordField.placeholderString = NSLocalizedString("Saved in Keychain", comment: "saved credential placeholder")
-            }
+        if enterprisePolicy.allowsCredentialSaving, profile.credentialReference != nil {
+            passwordField.placeholderString = NSLocalizedString("Saved in Keychain", comment: "saved credential placeholder")
         }
         switch profile.route {
         case .direct:
@@ -256,12 +257,8 @@ final class ProfileEditorWindowController: NSWindowController {
         case let .rdGateway(gateway):
             routePopup.selectItem(at: 4); proxyHostField.stringValue = gateway.endpoint.host; proxyPortField.stringValue = String(gateway.endpoint.port)
             saveRouteCredentialButton.state = .on
-            if enterprisePolicy.allowsCredentialSaving, let reference = gateway.credentialReference {
-                if let credential = loadCredential(reference) {
-                    proxyPasswordField.placeholderString = NSLocalizedString("Saved in Keychain", comment: "saved credential placeholder")
-                    proxyUsernameField.stringValue = credential.username
-                    gatewayDomainField.stringValue = credential.domain
-                }
+            if enterprisePolicy.allowsCredentialSaving, gateway.credentialReference != nil {
+                proxyPasswordField.placeholderString = NSLocalizedString("Saved in Keychain", comment: "saved credential placeholder")
             }
         }
         routeChanged()
@@ -271,21 +268,49 @@ final class ProfileEditorWindowController: NSWindowController {
         proxyHostField.stringValue = proxy.endpoint.host; proxyPortField.stringValue = String(proxy.endpoint.port)
         proxyUsernameField.stringValue = proxy.usernameHint
         saveRouteCredentialButton.state = .on
-        if enterprisePolicy.allowsCredentialSaving, let reference = proxy.credentialReference {
-            if let credential = loadCredential(reference) {
-                proxyPasswordField.placeholderString = NSLocalizedString("Saved in Keychain", comment: "saved credential placeholder")
-                proxyUsernameField.stringValue = credential.username
-            }
+        if enterprisePolicy.allowsCredentialSaving, proxy.credentialReference != nil {
+            proxyPasswordField.placeholderString = NSLocalizedString("Saved in Keychain", comment: "saved credential placeholder")
         }
     }
 
-    private func loadCredential(_ reference: CredentialReference) -> CredentialMaterial? {
-        do {
-            guard let material = try credentialStore.load(reference: reference) else { return nil }
-            loadedCredentialMaterials[reference] = material
-            return material
-        } catch {
-            return nil
+    private func beginCredentialPreload() {
+        guard enterprisePolicy.allowsCredentialSaving else { return }
+        let targetReference = profile.credentialReference
+        let routeReference: CredentialReference?
+        switch profile.route {
+        case let .socks5(proxy), let .httpConnect(proxy, _):
+            routeReference = proxy.credentialReference
+        case let .rdGateway(gateway):
+            routeReference = gateway.credentialReference
+        case .direct:
+            routeReference = nil
+        }
+        let references = Set([targetReference, routeReference].compactMap { $0 })
+        guard !references.isEmpty else { return }
+
+        saveButton.isEnabled = false
+        routeTestButton.isEnabled = false
+        credentialLoadTask = Task { [weak self, credentialStore] in
+            var loaded: [CredentialReference: CredentialMaterial] = [:]
+            for reference in references {
+                guard !Task.isCancelled else { return }
+                if let material = try? await credentialStore.loadWithoutBlockingUI(reference: reference) {
+                    loaded[reference] = material
+                }
+            }
+            guard !Task.isCancelled, let self else { return }
+            self.loadedCredentialMaterials.merge(loaded) { _, new in new }
+            if let routeReference, let material = loaded[routeReference] {
+                if self.proxyUsernameField.stringValue.isEmpty {
+                    self.proxyUsernameField.stringValue = material.username
+                }
+                if case .rdGateway = self.profile.route,
+                   self.gatewayDomainField.stringValue.isEmpty {
+                    self.gatewayDomainField.stringValue = material.domain
+                }
+            }
+            self.credentialLoadTask = nil
+            self.setSaving(self.isSaving)
         }
     }
 
@@ -295,8 +320,7 @@ final class ProfileEditorWindowController: NSWindowController {
         saveRouteCredentialButton.isEnabled = enabled && enterprisePolicy.allowsCredentialSaving
         gatewayDomainField.isEnabled = routePopup.indexOfSelectedItem == 4
         let credentialKind: CredentialReference.Kind = routePopup.indexOfSelectedItem == 4 ? .gateway : .proxy
-        if let reference = existingCredentialReference(for: credentialKind),
-           loadedCredentialMaterials[reference] != nil {
+        if existingCredentialReference(for: credentialKind) != nil {
             proxyPasswordField.placeholderString = NSLocalizedString("Saved in Keychain", comment: "saved credential placeholder")
         } else {
             proxyPasswordField.placeholderString = nil
@@ -308,6 +332,8 @@ final class ProfileEditorWindowController: NSWindowController {
 
     @objc private func cancel() {
         guard !isSaving else { return }
+        credentialLoadTask?.cancel()
+        credentialLoadTask = nil
         routeTestGeneration &+= 1
         routeTestTask?.cancel()
         routeTestTask = nil
@@ -327,9 +353,13 @@ final class ProfileEditorWindowController: NSWindowController {
             updated.usernameHint = usernameField.stringValue; updated.domainHint = domainField.stringValue
             updated.tags = tagsField.stringValue.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
             updated.isFavorite = favoriteButton.state == .on; updated.updatedAt = Date()
+            let desktopSize = try ConnectionFieldParser.desktopSize(
+                width: widthField.stringValue,
+                height: heightField.stringValue
+            )
             updated.display = DisplayConfiguration(
-                width: UInt32(clamping: widthField.integerValue),
-                height: UInt32(clamping: heightField.integerValue),
+                width: desktopSize.width,
+                height: desktopSize.height,
                 scaleMode: scalePopup.indexOfSelectedItem == 0 ? .fit : scalePopup.indexOfSelectedItem == 1 ? .actualSize : .dynamicResolution,
                 useAllDisplays: allDisplaysButton.state == .on, keyboardMode: keyboardPopup.indexOfSelectedItem == 0 ? .macPreferred : .windowsPreferred
             )
@@ -494,9 +524,9 @@ final class ProfileEditorWindowController: NSWindowController {
 
     private func setSaving(_ saving: Bool) {
         isSaving = saving
-        saveButton.isEnabled = !saving
+        saveButton.isEnabled = !saving && credentialLoadTask == nil
         cancelButton.isEnabled = !saving
-        routeTestButton.isEnabled = !saving
+        routeTestButton.isEnabled = !saving && credentialLoadTask == nil
     }
 
     private func validPort(_ control: NSTextField, name: String) throws -> UInt16 {
@@ -707,6 +737,30 @@ enum ConnectionFieldParser {
             throw ProfileValidationError.invalidPort(field)
         }
         return UInt16(parsed)
+    }
+
+    static func desktopSize(width rawWidth: String, height rawHeight: String) throws -> (width: UInt32, height: UInt32) {
+        let width = try unsignedInteger(rawWidth)
+        let height = try unsignedInteger(rawHeight)
+        let pixelCount = UInt64(width) * UInt64(height)
+        guard width >= 320,
+              height >= 200,
+              width <= DisplayConfiguration.maximumDimension,
+              height <= DisplayConfiguration.maximumDimension,
+              pixelCount <= DisplayConfiguration.maximumPixelCount else {
+            throw ProfileValidationError.invalidDesktopSize
+        }
+        return (width, height)
+    }
+
+    private static func unsignedInteger(_ rawValue: String) throws -> UInt32 {
+        let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty,
+              value.utf8.allSatisfy({ (48...57).contains($0) }),
+              let parsed = UInt32(value) else {
+            throw ProfileValidationError.invalidDesktopSize
+        }
+        return parsed
     }
 }
 

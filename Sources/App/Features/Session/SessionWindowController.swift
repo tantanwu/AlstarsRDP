@@ -133,7 +133,6 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
                 let proxyCredential = try await self.resolveProxyCredential()
 
                 let configuration = RDPConnectionConfiguration()
-                configuration.certificateName = self.profile.target.certificateName
                 configuration.username = targetCredential.username
                 configuration.domain = targetCredential.domain
                 configuration.password = targetCredential.password
@@ -150,8 +149,10 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
 
                 switch self.profile.route {
                 case .direct:
-                    configuration.connectionHost = self.profile.target.endpoint.host
-                    configuration.connectionPort = self.profile.target.endpoint.port
+                    configuration.configureServerAddress(
+                        target: self.profile.target,
+                        connectionEndpoint: self.profile.target.endpoint
+                    )
                 case .socks5, .httpConnect:
                     let routeConnector = RouteConnector(diagnostics: self.diagnostics)
                     let tunnel = LoopbackTunnel(routeConnector: routeConnector)
@@ -167,11 +168,15 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
                         return
                     }
                     self.tunnel = tunnel
-                    configuration.connectionHost = local.host
-                    configuration.connectionPort = local.port
+                    configuration.configureServerAddress(
+                        target: self.profile.target,
+                        connectionEndpoint: Endpoint(host: local.host, port: local.port)
+                    )
                 case let .rdGateway(gateway):
-                    configuration.connectionHost = self.profile.target.endpoint.host
-                    configuration.connectionPort = self.profile.target.endpoint.port
+                    configuration.configureServerAddress(
+                        target: self.profile.target,
+                        connectionEndpoint: self.profile.target.endpoint
+                    )
                     configuration.gatewayHost = gateway.endpoint.host
                     configuration.gatewayPort = gateway.endpoint.port
                     configuration.gatewayUsername = gatewayCredential?.username ?? ""
@@ -572,7 +577,7 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
     private func resolveTargetCredential() async throws -> CredentialMaterial? {
         if let ephemeralCredential { return ephemeralCredential }
         if let reference = profile.credentialReference,
-           let stored = try credentialStore.load(reference: reference),
+           let stored = try await credentialStore.loadWithoutBlockingUI(reference: reference),
            !stored.username.isEmpty, !stored.password.isEmpty {
             return stored
         }
@@ -621,7 +626,7 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
         guard case let .rdGateway(gateway) = profile.route else { return nil }
         if let ephemeralGatewayCredential { return ephemeralGatewayCredential }
         if let reference = gateway.credentialReference,
-           let stored = try credentialStore.load(reference: reference),
+           let stored = try await credentialStore.loadWithoutBlockingUI(reference: reference),
            !stored.username.isEmpty, !stored.password.isEmpty {
             return stored
         }
@@ -674,7 +679,7 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
         }
         if let ephemeralProxyCredential { return ephemeralProxyCredential }
         if let reference = proxy.credentialReference,
-           let stored = try credentialStore.load(reference: reference),
+           let stored = try await credentialStore.loadWithoutBlockingUI(reference: reference),
            !stored.username.isEmpty, !stored.password.isEmpty {
             return stored
         }
@@ -778,6 +783,15 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
         case .failed: return "The RDP session failed."
         @unknown default: return "The RDP session entered an unknown state."
         }
+    }
+}
+
+extension RDPConnectionConfiguration {
+    func configureServerAddress(target: TargetIdentity, connectionEndpoint: Endpoint) {
+        connectionHost = connectionEndpoint.host
+        connectionPort = connectionEndpoint.port
+        serverName = target.endpoint.host
+        certificateName = target.certificateName
     }
 }
 

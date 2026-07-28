@@ -617,10 +617,10 @@ RemoteDesktop/
 - [~] `M0-02` GitHub Actions 已构建 x86_64 slice；修复后的产物已在 macOS 11.7.10 Intel 实机启动并创建 `900x608` 主窗口。验证机当前锁屏，窗口服务器的解锁态 onscreen 复验尚未完成。
 - [~] `M0-03` arm64 Swift 测试、FreeRDP 编译及 Universal 2 slice 已通过；待 macOS 11 Apple Silicon 实机启动。
 - [x] `M0-04` 已合成 Universal 2，并在 CI 和 macOS 11 Intel 实机验证应用内全部 12 个 Mach-O 文件同时包含 arm64/x86_64 slice。
-- [ ] `M0-05` 连接 Windows 10/11 和 Server，验证 TLS/NLA。
-- [~] `M0-06` SOCKS5 和 HTTP CONNECT 隧道源码及解析器测试已编写，待 macOS 集成测试。
+- [~] `M0-05` macOS 11 Intel 已通过真实 Windows 目标的 TLS/NLA 并收到首帧；Windows 10/11/Server 完整矩阵仍待补齐。
+- [~] `M0-06` SOCKS5 和 HTTP CONNECT 的代理握手及目标隧道已在 macOS 11 验证；完整 RDP 会话的逻辑服务器名修复待 CI 与首帧验收。
 - [~] `M0-07` 已实现 `CertificateName` 原始目标传递，待真实证书验证。
-- [~] `M0-08` Core Graphics fallback、帧缩放和基本键鼠源码已实现，待 Mac 首帧与输入验收。
+- [~] `M0-08` macOS 11 Intel 已收到并显示真实远程首帧；Core Graphics fallback、帧缩放和键鼠输入矩阵仍待验收。
 - [~] `M0-09` Metal 纹理上传和输入坐标原型已编写，待性能验证。
 - [ ] `M0-10` 验证 RD Gateway、音频、磁盘、多屏及各重定向能力。
 - [~] `M0-11` Xcode 15.4、11.0 deployment target、Swift Concurrency 回部署和 ad-hoc 签名组合已通过；Developer ID 签名与公证未验证。
@@ -641,12 +641,12 @@ RemoteDesktop/
 ### 13.3 M2：核心远程桌面
 
 - [~] `M2-01` 连接库和六分区编辑器源码已实现，待 UI 验收。
-- [~] `M2-02` Direct 路径配置与 FreeRDP 直连源码已实现，待 Windows 实测。
+- [~] `M2-02` Direct 路径已在 macOS 11 Intel 完成真实 Windows TLS/NLA 和首帧验证；长稳及 Windows 版本矩阵待补齐。
 - [~] `M2-03` SOCKS5 无认证/用户名密码、代理 DNS、IPv4/IPv6 字面量 ATYP 编码、编码前凭据边界、Keychain 缺失时临时代理凭据提示及取消语义源码和协议测试已编写。
 - [~] `M2-04` HTTP/HTTPS CONNECT Basic、防注入、16 KiB 请求上限、响应上限及失败连接回收源码和协议测试已编写。
 - [~] `M2-05` 15 秒路径测试、路由阶段错误和目标/代理/网关统一入口校验已实现，DNS/代理细分展示待完善并验收。
 - [~] `M2-06` 首次信任与证书变化告警源码已实现，待证书链信息和实测。
-- [~] `M2-07` 会话窗口、Core Graphics fallback 与 Metal 渲染源码已实现；帧长度/步幅/溢出校验和 256 MiB 上限已统一，桥接层仅保留最新一帧；待 Objective-C++ 编译、首帧、关闭竞态和性能验收。
+- [~] `M2-07` 会话窗口、Core Graphics fallback 与 Metal 渲染已编译；帧长度/步幅/溢出校验和 256 MiB 上限已统一，桥接层仅保留最新一帧；macOS 11 Intel 已显示真实首帧，关闭竞态和性能验收待完成。
 - [~] `M2-08` Retina 坐标、窗口缩放和全屏源码已实现，待多 DPI/多空间验收。
 - [~] `M2-09` 鼠标、滚轮、扫描码、修饰键释放源码已实现，待布局矩阵。
 - [~] `M2-10` 键盘模式、安全序列和 Command 捕获差异已实现，待组合键及布局矩阵验收。
@@ -708,12 +708,12 @@ RemoteDesktop/
 | 指标 | 当前值 | 更新时间 |
 |---|---:|---|
 | 当前里程碑 | M0 技术验证与基线 | 2026-07-28 |
-| 总体状态 | 开发中（Universal 2 CI 已通过；macOS 11 Intel 已创建主窗口；真实 SOCKS5/HTTP CONNECT 路径可达；FreeRDP 预连接和设置页累计偏移已修复；`0x0002000D` 已定位为 OpenSSL 3 legacy provider 缺失导致的 NTLM MD4 初始化失败，内置 MD4/RC4 修复待 CI 与真机首帧验收） | 2026-07-28 |
+| 总体状态 | 开发中（Universal 2 CI 已通过；macOS 11 Intel 的 Direct TLS/NLA 与真实首帧已通过；SOCKS5/HTTP CONNECT 隧道可达但完整 RDP 因逻辑服务器名错误仍待修复版验收；分辨率严格保存修复待验证） | 2026-07-28 |
 | 已完成任务 | 3 | 2026-07-28 |
 | P0 未关闭缺陷 | 0 | 2026-07-28 |
-| P1 未关闭缺陷 | 0 | 2026-07-28 |
+| P1 未关闭缺陷 | 2 | 2026-07-28 |
 | 最大风险 | 尚无受控 Windows/RD Gateway/企业代理实验室，无法验证实际 TLS/NLA、代理、网关与重定向行为 | 2026-07-28 |
-| 下一门禁 | 在 macOS 11 Intel 通过修复后的 `3389`/`7897` 配置完成 TLS/NLA 登录和首帧验收；随后完成 Apple Silicon 启动及其余 Windows/网关矩阵 | 待 GUI 凭据确认及提供 Apple Silicon/实验室 |
+| 下一门禁 | 新修复版通过双架构 CI 后，在 macOS 11 Intel 分别完成 Direct、SOCKS5、HTTP CONNECT 首帧和分辨率关闭编辑器后重开持久化验收 | 待新构建及 GUI 验收 |
 
 ### 14.2 当前实现快照
 
@@ -722,9 +722,9 @@ RemoteDesktop/
 | 领域 | 已写入源码 | 尚缺的完成证据/实现 |
 |---|---|---|
 | 工程与依赖 | XcodeGen、SwiftPM、CMake/FreeRDP、Universal 2、归档/公证脚本和 macOS CI；GitHub hosted arm64/x86_64 已分别编译 FreeRDP 3.30.0；运行 `30325083089` 已通过 Xcode 15.4 Universal 2 构建、Swift/AppKit/renderer 测试、签名、依赖闭包和 artifact 上传；产物已在 macOS 11 Intel 创建主窗口 | 完成修复版 Intel 解锁态 onscreen 与连接复验；锁定 OpenSSL 精确版本/来源/哈希；验证全部通道插件；macOS 11 Apple Silicon 启动；Developer ID 签名与公证 |
-| 配置与凭据 | SQLite schema v1/WAL、名称/主机/标签搜索、严格 schema、流式输入大小门禁、版本化备份/恢复、数据库/WAL/SHM 批量隔离及失败回滚、导入/迁移回滚失败报告、配置删除事务、凭据唯一所有权、乐观并发、删除/更新竞态防护，三类 Keychain 隔离引用，跨存储事务串行化、临时凭据提示，以及写入/落库/旧引用清理和回滚残留报告；备份剥离全部 Keychain 引用和共享目录授权，恢复清理无引用 Keychain 项 | macOS SQLite/Keychain 测试；并发、故障注入与恢复路径人工验收 |
-| 网络代理 | Direct、SOCKS5、HTTP/HTTPS CONNECT、仅 loopback 随机端口隧道、代次化停止/失败连接回收、目标/代理/网关统一校验、SOCKS5 域名及 IPv4/IPv6 ATYP、代理端 DNS、Basic、防注入、编码前请求/凭据边界、响应上限、临时代理凭据和 15 秒路径测试；代理握手现于 FreeRDP 启动前完成并将错误返回 UI；macOS 11 上 Clash Verge `127.0.0.1:7897` 已分别以 SOCKS5/HTTP CONNECT 到达真实目标 `3389` | 通过应用完成代理 RDP 登录与首帧；PAC、本机目标 DNS 和企业代理矩阵 |
-| RDP 核心 | FreeRDP TLS/NLA、禁用旧 RDP Security、原始证书名、RD Gateway、取消、证书决策桥接及受限终态转换；补齐官方客户端路径要求的静态通道 provider；增加分阶段错误、原生错误名/描述、WinPR/socket 错误和脱敏 FreeRDP 日志；已为 NTLM 构建 WinPR 内置 MD4/RC4，并增加无外部 OpenSSL provider 的已知向量门禁 | 内置 NTLM 加密修复的双架构 CI 与 macOS 11 首帧验收；Windows/RD Gateway 实测；完整认证/错误码矩阵 |
+| 配置与凭据 | SQLite schema v1/WAL、名称/主机/标签搜索、严格 schema、流式输入大小门禁、版本化备份/恢复、数据库/WAL/SHM 批量隔离及失败回滚、导入/迁移回滚失败报告、配置删除事务、凭据唯一所有权、乐观并发、删除/更新竞态防护，三类 Keychain 隔离引用，跨存储事务串行化、临时凭据提示，以及写入/落库/旧引用清理和回滚残留报告；备份剥离全部 Keychain 引用和共享目录授权，恢复清理无引用 Keychain 项；Keychain 查询已移出 AppKit 主线程 | 新 Keychain 后台查询测试通过 CI；macOS Keychain 授权、并发、故障注入与恢复路径人工验收 |
+| 网络代理 | Direct、SOCKS5、HTTP/HTTPS CONNECT、仅 loopback 随机端口隧道、代次化停止/失败连接回收、目标/代理/网关统一校验、SOCKS5 域名及 IPv4/IPv6 ATYP、代理端 DNS、Basic、防注入、编码前请求/凭据边界、响应上限、临时代理凭据和 15 秒路径测试；代理握手现于 FreeRDP 启动前完成并将错误返回 UI；macOS 11 上 SOCKS5/HTTP CONNECT 已到达真实 RDP 目标；本地 socket 地址与 NLA 逻辑服务器名已分离 | 新映射通过 CI，并通过应用分别完成 SOCKS5/HTTP CONNECT 的 RDP 登录与首帧；PAC、本机目标 DNS 和企业代理矩阵 |
+| RDP 核心 | FreeRDP TLS/NLA、禁用旧 RDP Security、原始证书名、RD Gateway、取消、证书决策桥接及受限终态转换；补齐官方客户端路径要求的静态通道 provider；增加分阶段错误、原生错误名/描述、WinPR/socket 错误和脱敏 FreeRDP 日志；已为 NTLM 构建 WinPR 内置 MD4/RC4 并增加无外部 OpenSSL provider 的已知向量门禁；Direct TLS/NLA 与真实首帧已在 macOS 11 Intel 通过 | 代理完整会话首帧；Windows/RD Gateway 实测；完整认证/错误码矩阵 |
 | 会话与输入 | 独立 session ID、旧回调过滤、有限退避、睡眠/网络路径处理、Metal/Core Graphics 自动回退、统一帧边界校验、256 MiB 单帧上限、仅保留最新帧、边界坐标、拖拽 MOVE、两种 Command 模式、全屏和安全序列；Objective-C++/AppKit/renderer 已编译测试 | 帧关闭竞态实测；动态分辨率更新；键盘布局与实机性能矩阵 |
 | 资源重定向 | FreeRDP 能力开关；用户选目录、安全书签、书签元数据边界和会话级授权生命周期 | 以 3.30.0 头文件完成 rdpdr 设备注册；剪贴板控制器、通道打包和音频/设备实测 |
 | 企业管理 | MDM/强制偏好解析；重连、缩放、重定向上限；禁止保存凭据；禁止私有诊断导出；设置 UI 锁定和连接前再次收敛；macOS 11 deployment target 编译已通过 | 真实 MDM 下发、移除与绕过测试；管理员签收 |
@@ -767,7 +767,10 @@ RemoteDesktop/
 | BUG-003 | P1 | 代理或 RDP 失败后会话窗口只有空白画面，无法判断阶段和错误 | 本地 listener 在真实代理握手前返回，后台握手错误被隧道吞掉；状态仅在紧凑工具栏显示 | `dbbb3cc` 在建立 listener 前完成代理握手并直接抛错；新增中央状态/错误/重试层和深色等待画布，仅在帧校验通过后隐藏状态层 | 已修复，待应用内 RDP 首帧验收 |
 | BUG-004 | P1 | Direct 连接持续失败并显示 `0x00020001` | 自建 `freerdp_new`/`freerdp_context_new` 路径在加载静态通道前未执行官方客户端路径的 `freerdp_register_addin_provider`，导致 PreConnect 在网络、TLS/NLA 和认证前失败 | `74d6ac4` 在 PreConnect 加载 add-ins 前线程安全注册 `freerdp_channels_load_static_addin_entry`；增加分阶段错误摘要和分类测试 | 代码与 CI 已修复，待 macOS 11 真机连接/首帧复验 |
 | BUG-005 | P2 | 设置页每次测试连接后，Network 页文字向右下角累计移动 | `NSTabViewItem` 直接承载带 `edgeInsets` 的可变尺寸 `NSStackView`，测试按钮标题变化和 sheet 关闭反复触发 tab 内容重排 | `74d6ac4` 使用稳定容器和顶部/左侧 Auto Layout 约束，固定测试按钮 alignment width；`7e7a9d9` 增加连续标题变化的 AppKit 坐标稳定性测试 | 已修复并通过 CI，待 macOS 11 真机连续点击复验 |
-| BUG-006 | P1 | 连接真实 Windows 目标时持续显示 `0x0002000D` | 静态 OpenSSL 3 构建未携带 legacy provider；NLA/NTLM 初始化 MD4 时失败并返回 `SEC_E_NO_CREDENTIALS`，外层再覆盖为通用连接错误 | 构建 WinPR 内置 MD4/RC4；逐架构检查编译宏，并在 `OPENSSL_MODULES` 指向空目录时执行 MD4/RC4 已知向量测试 | 根因已确认，修复已编码，待双架构 CI 与 macOS 11 首帧验收 |
+| BUG-006 | P1 | 连接真实 Windows 目标时持续显示 `0x0002000D` | 静态 OpenSSL 3 构建未携带 legacy provider；NLA/NTLM 初始化 MD4 时失败并返回 `SEC_E_NO_CREDENTIALS`，外层再覆盖为通用连接错误 | `848396c` 构建 WinPR 内置 MD4/RC4；CI `30332296837` 双架构通过；macOS 11 Intel 已完成 Direct TLS/NLA 并显示真实首帧 | 已修复并完成 Direct 真机验收 |
+| BUG-007 | P1 | 路径测试成功，但通过 SOCKS5/HTTP CONNECT 启动完整 RDP 会话仍失败 | loopback 隧道地址被写入 `FreeRDP_ServerHostname`，且没有设置原始目标的 `UserSpecifiedServerName`，导致 NLA 生成 `TERMSRV/127.0.0.1` | 保持 `ServerHostname=127.0.0.1` 用于 socket，将原始目标写入 `UserSpecifiedServerName` 供 NLA/SPN 使用，并保留独立 `CertificateName`；增加映射与复制回归测试 | 修复已编码，待 CI 与两种代理首帧验收 |
+| BUG-008 | P1 | 修改分辨率后无法保存，重新打开仍为旧值 | 宽高继续使用 `NSTextField.integerValue` 和 clamping 转换，未采用端口修复后的严格无分组字符串路径 | 加载使用无分组十进制字符串；保存严格拒绝分组、小数、负数、空值、越界和超像素上限输入；增加解析回归测试 | 修复已编码，待 CI 与关闭/重开编辑器验收 |
+| BUG-009 | P2 | 打开设置或连接时，Keychain 授权查询可能阻塞 AppKit 主线程 | 同步 `SecItemCopyMatching` 从主 actor 调用 | 通过 `Task.detached` 后台读取，主线程仅消费结果；增加线程回归测试 | 修复已编码，待 CI 与真机授权弹窗验收 |
 
 ### 14.3.4 代理与空白会话修复证据
 
@@ -790,7 +793,16 @@ RemoteDesktop/
 - 网络与协议取证：macOS 11 真机保存的 `Etsy` 配置使用 Direct 路由；目标 TCP `3389`、X.224 协商和 TLS 1.2 握手均成功，服务端选择 `HYBRID_EX`，因此 `0x0002000D` 不是目标不可达或代理失败。
 - 原生诊断：提交 `efb442c` 捕获 FreeRDP 错误名/描述、WinPR/socket 错误和 ERROR 级原生日志，并对用户名、密码脱敏。GitHub Actions 运行 [30330201522](https://github.com/tantanwu/AlstarsRDP/actions/runs/30330201522) 全绿；真机日志明确记录 `Failed to initialize digest md4` 与 `InitializeSecurityContext status SEC_E_NO_CREDENTIALS [0x8009030e]`。
 - 根因：FreeRDP/WinPR 链接静态 OpenSSL 3，但应用包没有 OpenSSL legacy provider。NTLM 所需的 MD4 和 RC4 不应依赖构建机 Homebrew provider 路径。
-- 修复与门禁：显式启用 FreeRDP 3.30.0 的 `WITH_INTERNAL_MD4` 和 `WITH_INTERNAL_RC4`；逐架构检查安装后的 WinPR 配置宏，并在 `OPENSSL_MODULES` 指向空目录时运行 MD4、RC4 标准向量。CI、真机认证结果和首帧证据待补充。
+- 修复与门禁：提交 `848396c` 显式启用 FreeRDP 3.30.0 的 `WITH_INTERNAL_MD4` 和 `WITH_INTERNAL_RC4`；逐架构检查安装后的 WinPR 配置宏，并在 `OPENSSL_MODULES` 指向空目录时运行 MD4、RC4 标准向量。
+- 自动化与真机证据：GitHub Actions `30332296837` 全绿；产物在 macOS 11.7.10 Intel 通过严格签名、Universal 2 和最低系统版本检查，Direct TLS/NLA 成功并收到真实远程首帧，不再出现 MD4 或 `SEC_E_NO_CREDENTIALS` 错误。
+
+### 14.3.7 代理服务器身份与分辨率持久化修复
+
+- FreeRDP 3.30.0 取证：`transport.c` 使用 `ServerHostname` 建立 TCP/TLS socket；`freerdp_settings_get_server_name` 优先返回 `UserSpecifiedServerName`；`nla.c` 用该值建立 `TERMSRV/<hostname>` CredSSP 身份；`CertificateName` 独立覆盖证书名称验证。
+- 代理修复：loopback 继续作为唯一 socket 目标，原始 Windows 主机作为 `UserSpecifiedServerName`，原始证书身份继续作为 `CertificateName`。`TargetNetAddress` 已确认仅用于服务端重定向，不用于该隧道场景。
+- 分辨率修复：宽高统一使用纯 ASCII 十进制读写，范围为宽至少 320、高至少 200、单边不超过 16384、总像素不超过 67,108,864；非法输入不再被截断或 clamp 后静默保存。
+- Keychain 响应性：配置编辑器与会话启动的 Keychain 读取移至后台执行，避免授权交互冻结 AppKit 主线程；不改变 Keychain service、访问控制或凭据存储格式。
+- 待验收：双架构 CI；macOS 11 Intel 上 Direct、SOCKS5、HTTP CONNECT 首帧；分辨率保存后关闭编辑器并重开值不变；连续代理路径测试布局不漂移。
 
 ### 14.4 每周状态模板
 
@@ -939,6 +951,7 @@ RemoteDesktop/
 | 2026-07-28 | 0.2.7 | 修复本地化端口被截断、代理握手错误被吞和会话空白页；增加严格端口、代理准备失败、中央状态/重试和首帧显示保护；修复真机 profile 并验证真实 SOCKS5/HTTP CONNECT 路径 | 用户报告连接窗口空白且代理测试始终失败；取证确认 `3389/7897` 被保存为 `3/7`，并完成 CI #29 与真机网络验证 | Codex |
 | 2026-07-28 | 0.2.8 | 修复 FreeRDP 静态通道 provider 未注册导致的 `0x00020001`；设置页改为稳定 tab 容器并固定测试按钮 alignment width；增加错误摘要、错误码分类及布局回归测试；CI `30325083089` 全绿 | 用户报告 Direct 连接持续在 PreConnect 失败，且每次测试连接后设置页内容累计偏移；源码与 FreeRDP 固定版本取证确认两个根因 | Codex |
 | 2026-07-28 | 0.2.9 | 增加 FreeRDP 原生错误诊断；定位 `0x0002000D` 为 OpenSSL 3 legacy provider 缺失导致的 NTLM MD4 初始化失败；改用 WinPR 内置 MD4/RC4 并增加无外部 provider 的逐架构加密向量门禁 | 真机已完成 TCP、X.224、TLS 取证，失败点收敛到 NLA/NTLM；避免应用运行时依赖 Homebrew OpenSSL 模块目录 | Codex |
+| 2026-07-28 | 0.3.0 | 完成 Direct TLS/NLA 与首帧验收；修复代理 loopback 地址污染 NLA/SPN 服务器身份、分辨率本地化解析与持久化、Keychain 查询阻塞主线程；增加服务器地址映射、配置复制、分辨率边界和后台线程测试 | 用户确认 Direct 已连接，但完整代理 RDP 仍失败且分辨率无法保存；FreeRDP 3.30.0 源码和真机数据库取证确认根因 | Codex |
 
 ---
 

@@ -147,6 +147,7 @@ targets:
       - target: RDPTransport
       - target: Persistence
       - target: RDPRenderer
+      - target: RDPBridge
       - target: RemoteDesktop
     settings:
       base:

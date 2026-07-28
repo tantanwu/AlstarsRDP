@@ -26,6 +26,7 @@ typedef NS_OPTIONS(NSUInteger, RDPMouseButton) {
 @interface RDPConnectionConfiguration : NSObject <NSCopying>
 @property(nonatomic, copy) NSString *connectionHost;
 @property(nonatomic) uint16_t connectionPort;
+@property(nonatomic, copy) NSString *serverName;
 @property(nonatomic, copy) NSString *certificateName;
 @property(nonatomic, copy) NSString *username;
 @property(nonatomic, copy) NSString *domain;

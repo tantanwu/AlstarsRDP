@@ -3,6 +3,14 @@ import XCTest
 import RDPDomain
 
 final class CredentialTransactionTests: XCTestCase {
+    func testAsyncCredentialLoadRunsOutsideTheMainThread() async throws {
+        let store = ThreadRecordingCredentialStore()
+        _ = try await Task { @MainActor in
+            try await store.loadWithoutBlockingUI(reference: CredentialReference(kind: .target))
+        }.value
+        XCTAssertFalse(store.loadedOnMainThread)
+    }
+
     func testCredentialMaterialRejectsNullAndOversizedValues() {
         XCTAssertThrowsError(try CredentialMaterial(
             username: "alice",
@@ -357,4 +365,24 @@ private final class MemoryCredentialStore: CredentialStoring, @unchecked Sendabl
         if failingDeletes.contains(reference) { throw TestError.deleteFailed }
         values.removeValue(forKey: reference)
     }
+}
+
+private final class ThreadRecordingCredentialStore: CredentialStoring, @unchecked Sendable {
+    private let lock = NSLock()
+    private var recordedMainThread = true
+
+    var loadedOnMainThread: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return recordedMainThread
+    }
+
+    func save(_ material: CredentialMaterial, reference: CredentialReference) throws {}
+
+    func load(reference: CredentialReference) throws -> CredentialMaterial? {
+        lock.lock(); defer { lock.unlock() }
+        recordedMainThread = Thread.isMainThread
+        return nil
+    }
+
+    func delete(reference: CredentialReference) throws {}
 }

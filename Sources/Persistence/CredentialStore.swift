@@ -38,6 +38,15 @@ public protocol CredentialStoring: Sendable {
     func delete(reference: CredentialReference) throws
 }
 
+public extension CredentialStoring {
+    func loadWithoutBlockingUI(reference: CredentialReference) async throws -> CredentialMaterial? {
+        try await Task.detached(priority: .userInitiated) {
+            try Task.checkCancellation()
+            return try self.load(reference: reference)
+        }.value
+    }
+}
+
 public enum CredentialStoreError: Error, LocalizedError, Sendable {
     case encoding
     case invalidMaterial

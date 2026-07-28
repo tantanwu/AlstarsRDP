@@ -43,6 +43,7 @@
     if (self) {
         _connectionHost = @"";
         _connectionPort = 3389;
+        _serverName = @"";
         _certificateName = @"";
         _username = @"";
         _domain = @"";
@@ -71,6 +72,7 @@
     RDPConnectionConfiguration *copy = [[[self class] allocWithZone:zone] init];
     copy.connectionHost = self.connectionHost;
     copy.connectionPort = self.connectionPort;
+    copy.serverName = self.serverName;
     copy.certificateName = self.certificateName;
     copy.username = self.username;
     copy.domain = self.domain;
@@ -302,9 +304,11 @@ static BOOL RDPSetString(rdpSettings *settings, FreeRDP_Settings_Keys_String id,
 }
 
 static BOOL RDPConfigureSettings(rdpSettings *settings, RDPConnectionConfiguration *configuration) {
-    if (!settings || configuration.connectionHost.length == 0 || configuration.certificateName.length == 0) return FALSE;
+    if (!settings || configuration.connectionHost.length == 0 || configuration.serverName.length == 0 ||
+        configuration.certificateName.length == 0) return FALSE;
     BOOL ok = RDPSetString(settings, FreeRDP_ServerHostname, configuration.connectionHost) &&
               freerdp_settings_set_uint32(settings, FreeRDP_ServerPort, configuration.connectionPort) &&
+              RDPSetString(settings, FreeRDP_UserSpecifiedServerName, configuration.serverName) &&
               RDPSetString(settings, FreeRDP_CertificateName, configuration.certificateName) &&
               RDPSetString(settings, FreeRDP_Username, configuration.username) &&
               RDPSetString(settings, FreeRDP_Domain, configuration.domain) &&
