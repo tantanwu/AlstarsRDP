@@ -84,6 +84,30 @@ validate_native_install() {
   done < <(find "${install}/lib" -type f | sort)
 }
 
+validate_ntlm_crypto() {
+  local install="$1"
+  local architecture="$2"
+  local build="$3"
+  local verifier="${build}/verify-ntlm-crypto"
+  local empty_modules="${build}/empty-openssl-modules"
+
+  for algorithm in MD4 RC4; do
+    grep -Eq "^#define WITH_INTERNAL_${algorithm}([[:space:]]+1)?$" \
+      "${install}/include/winpr3/winpr/config.h" || {
+      echo "The ${architecture} WinPR build does not contain internal ${algorithm} support." >&2
+      return 1
+    }
+  done
+  mkdir -p "${empty_modules}"
+  cc -std=c11 -arch "${architecture}" \
+    -mmacosx-version-min="${deployment_target}" \
+    -I"${install}/include/winpr3" \
+    "${root}/Tools/verify-ntlm-crypto.c" \
+    -L"${install}/lib" -Wl,-rpath,"${install}/lib" -lwinpr3 \
+    -o "${verifier}"
+  OPENSSL_MODULES="${empty_modules}" "${verifier}"
+}
+
 build_architecture() {
   local architecture="$1"
   local openssl_root
@@ -103,6 +127,8 @@ build_architecture() {
     -DOPENSSL_ROOT_DIR="${openssl_root}" \
     -DOPENSSL_USE_STATIC_LIBS=TRUE \
     -DWITH_OPENSSL=ON \
+    -DWITH_INTERNAL_MD4=ON \
+    -DWITH_INTERNAL_RC4=ON \
     -DWITH_JSON_DISABLED=ON \
     -DWITH_SERVER=OFF \
     -DWITH_PROXY=OFF \
@@ -125,6 +151,7 @@ build_architecture() {
   cmake --build "${build}" --parallel
   cmake --install "${build}"
   validate_native_install "${install}" "${architecture}"
+  validate_ntlm_crypto "${install}" "${architecture}" "${build}"
 }
 
 merge_universal() {
@@ -200,7 +227,7 @@ merge_universal() {
 }
 
 if [[ ${#architectures[@]} -gt 0 ]]; then
-  for command in cmake file find git lipo ninja otool; do
+  for command in cc cmake file find git lipo ninja otool; do
     command -v "${command}" >/dev/null || { echo "Missing ${command}" >&2; exit 1; }
   done
   if [[ ! -d "${source_dir}/.git" ]]; then

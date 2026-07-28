@@ -158,6 +158,20 @@ foreach ($property in @('version', 'commit', 'tagObject', 'source', 'deploymentT
 if ($buildScript -match '(?m)^(tag|commit|tag_object|source|deployment_target)=\"[^$]') {
     Add-Failure 'build-freerdp.sh must not duplicate dependency pins outside Vendor/manifest.json.'
 }
+foreach ($algorithm in @('MD4', 'RC4')) {
+    if ($buildScript -notmatch "-DWITH_INTERNAL_$algorithm=ON") {
+        Add-Failure "FreeRDP must build WinPR's internal $algorithm implementation for NTLM."
+    }
+}
+if ($buildScript -notmatch 'OPENSSL_MODULES=' -or $buildScript -notmatch 'verify-ntlm-crypto\.c') {
+    Add-Failure 'FreeRDP builds must verify NTLM crypto without an external OpenSSL provider.'
+}
+$ntlmCryptoVerifier = Read-StrictUtf8 (Join-Path $root 'Tools/verify-ntlm-crypto.c')
+foreach ($requiredPrimitive in @('WINPR_MD_MD4', 'winpr_RC4_New')) {
+    if (-not $ntlmCryptoVerifier.Contains($requiredPrimitive)) {
+        Add-Failure "The NTLM crypto verifier is missing $requiredPrimitive."
+    }
+}
 
 $universalVerifier = Read-StrictUtf8 (Join-Path $root 'Tools/verify-universal.sh')
 if ($universalVerifier -match 'spctl[^\r\n]*\|\|\s*true') {
