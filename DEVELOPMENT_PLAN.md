@@ -768,9 +768,9 @@ RemoteDesktop/
 | BUG-004 | P1 | Direct 连接持续失败并显示 `0x00020001` | 自建 `freerdp_new`/`freerdp_context_new` 路径在加载静态通道前未执行官方客户端路径的 `freerdp_register_addin_provider`，导致 PreConnect 在网络、TLS/NLA 和认证前失败 | `74d6ac4` 在 PreConnect 加载 add-ins 前线程安全注册 `freerdp_channels_load_static_addin_entry`；增加分阶段错误摘要和分类测试 | 代码与 CI 已修复，待 macOS 11 真机连接/首帧复验 |
 | BUG-005 | P2 | 设置页每次测试连接后，Network 页文字向右下角累计移动 | `NSTabViewItem` 直接承载带 `edgeInsets` 的可变尺寸 `NSStackView`，测试按钮标题变化和 sheet 关闭反复触发 tab 内容重排 | `74d6ac4` 使用稳定容器和顶部/左侧 Auto Layout 约束，固定测试按钮 alignment width；`7e7a9d9` 增加连续标题变化的 AppKit 坐标稳定性测试 | 已修复并通过 CI，待 macOS 11 真机连续点击复验 |
 | BUG-006 | P1 | 连接真实 Windows 目标时持续显示 `0x0002000D` | 静态 OpenSSL 3 构建未携带 legacy provider；NLA/NTLM 初始化 MD4 时失败并返回 `SEC_E_NO_CREDENTIALS`，外层再覆盖为通用连接错误 | `848396c` 构建 WinPR 内置 MD4/RC4；CI `30332296837` 双架构通过；macOS 11 Intel 已完成 Direct TLS/NLA 并显示真实首帧 | 已修复并完成 Direct 真机验收 |
-| BUG-007 | P1 | 路径测试成功，但通过 SOCKS5/HTTP CONNECT 启动完整 RDP 会话仍失败 | loopback 隧道地址被写入 `FreeRDP_ServerHostname`，且没有设置原始目标的 `UserSpecifiedServerName`，导致 NLA 生成 `TERMSRV/127.0.0.1` | 保持 `ServerHostname=127.0.0.1` 用于 socket，将原始目标写入 `UserSpecifiedServerName` 供 NLA/SPN 使用，并保留独立 `CertificateName`；增加映射与复制回归测试 | 修复已编码，待 CI 与两种代理首帧验收 |
-| BUG-008 | P1 | 修改分辨率后无法保存，重新打开仍为旧值 | 宽高继续使用 `NSTextField.integerValue` 和 clamping 转换，未采用端口修复后的严格无分组字符串路径 | 加载使用无分组十进制字符串；保存严格拒绝分组、小数、负数、空值、越界和超像素上限输入；增加解析回归测试 | 修复已编码，待 CI 与关闭/重开编辑器验收 |
-| BUG-009 | P2 | 打开设置或连接时，Keychain 授权查询可能阻塞 AppKit 主线程 | 同步 `SecItemCopyMatching` 从主 actor 调用 | 通过 `Task.detached` 后台读取，主线程仅消费结果；增加线程回归测试 | 修复已编码，待 CI 与真机授权弹窗验收 |
+| BUG-007 | P1 | 路径测试成功，但通过 SOCKS5/HTTP CONNECT 启动完整 RDP 会话仍失败 | 第一根因是 loopback 地址污染 NLA/SPN 身份；修复后真机原生日志进一步定位到第二根因：`newConnectionHandler` 在 accepted `NWConnection` 启动并进入 `.ready` 前立即取消 listener，导致 FreeRDP 对 loopback 的非阻塞 connect 被提前拆除 | 保持 `ServerHostname=127.0.0.1`、原始主机写入 `UserSpecifiedServerName`/`CertificateName`；listener 延长到首个 downstream socket 达到 `.ready` 后再取消；增加身份映射、真实 TCP 双向 relay、单连接和停止/重启回归测试 | 身份修复 CI 已通过；listener 修复已编码，待新 CI 与两种代理首帧验收 |
+| BUG-008 | P1 | 修改分辨率后无法保存，重新打开仍为旧值 | 宽高继续使用 `NSTextField.integerValue` 和 clamping 转换，未采用端口修复后的严格无分组字符串路径 | 加载使用无分组十进制字符串；保存严格拒绝分组、小数、负数、空值、越界和超像素上限输入；增加解析回归测试 | 已修复；CI 通过，macOS 11 真机保存、关闭并重开编辑器验证通过 |
+| BUG-009 | P2 | 打开设置或连接时，Keychain 授权查询可能阻塞 AppKit 主线程 | 同步 `SecItemCopyMatching` 从主 actor 调用 | 通过 `Task.detached` 后台读取，主线程仅消费结果；增加线程回归测试 | 已修复；双架构 CI 与 macOS 11 后台线程测试通过 |
 
 ### 14.3.4 代理与空白会话修复证据
 
@@ -802,7 +802,11 @@ RemoteDesktop/
 - 代理修复：loopback 继续作为唯一 socket 目标，原始 Windows 主机作为 `UserSpecifiedServerName`，原始证书身份继续作为 `CertificateName`。`TargetNetAddress` 已确认仅用于服务端重定向，不用于该隧道场景。
 - 分辨率修复：宽高统一使用纯 ASCII 十进制读写，范围为宽至少 320、高至少 200、单边不超过 16384、总像素不超过 67,108,864；非法输入不再被截断或 clamp 后静默保存。
 - Keychain 响应性：配置编辑器与会话启动的 Keychain 读取移至后台执行，避免授权交互冻结 AppKit 主线程；不改变 Keychain service、访问控制或凭据存储格式。
-- 待验收：双架构 CI；macOS 11 Intel 上 Direct、SOCKS5、HTTP CONNECT 首帧；分辨率保存后关闭编辑器并重开值不变；连续代理路径测试布局不漂移。
+- 自动化与产物：提交 `15b6239` 的 GitHub Actions `30340814145` 全绿，包含双架构 Swift、FreeRDP、Universal 2、AppKit/Objective-C++、Keychain 后台线程测试；artifact ID `8681011299`，Actions SHA-256 `1b5be4d43d42e9cb514f57fabae4058c8eb8cde2eae39300b175c54247c6ea33`，内层 ZIP SHA-256 `251c67e83df18b52ee59d6fa6c99ac409d55fcfcafcb11879ca42d51c0751a4a`。
+- 真机持久化验收：产物在 macOS 11.7.10 Intel 通过严格 codesign、x86_64/arm64 和最低系统 11.0 检查；分辨率由 `1920x1080` 改为 `1600x900`，保存、关闭编辑器并重开后保持不变，随后已恢复原值 `1920x1080` 并由数据库确认。BUG-008 完成。
+- 代理第二根因：SOCKS5 握手成功后，完整 RDP 仍在本机 `127.0.0.1` 随机端口的 TCP 接入阶段失败；桥接层脱敏日志记录 `Couldn't get socket ip address`、`ConnectLayer 127.0.0.1:<port> failed`，失败早于 TLS/NLA。代码审计确认 `LoopbackTunnel.accept` 在 downstream `start`/`.ready` 前调用 `listener.cancel()`。
+- listener 修复：首个 downstream 被认领后继续拒绝其他连接，但保留 listener 直到该 socket 达到 `.ready`；正常、失败、任务取消和竞争路径均取消 listener 并回收上下游连接。新增真实本地 TCP 回显集成测试覆盖 prefetched data、双向转发、单连接约束以及 stop 后重新启动。
+- 待验收：listener 修复的双架构 CI；macOS 11 Intel 上 SOCKS5、HTTP CONNECT 与 Direct 完整 RDP 首帧；连续代理路径测试布局不漂移。
 
 ### 14.4 每周状态模板
 
@@ -952,6 +956,7 @@ RemoteDesktop/
 | 2026-07-28 | 0.2.8 | 修复 FreeRDP 静态通道 provider 未注册导致的 `0x00020001`；设置页改为稳定 tab 容器并固定测试按钮 alignment width；增加错误摘要、错误码分类及布局回归测试；CI `30325083089` 全绿 | 用户报告 Direct 连接持续在 PreConnect 失败，且每次测试连接后设置页内容累计偏移；源码与 FreeRDP 固定版本取证确认两个根因 | Codex |
 | 2026-07-28 | 0.2.9 | 增加 FreeRDP 原生错误诊断；定位 `0x0002000D` 为 OpenSSL 3 legacy provider 缺失导致的 NTLM MD4 初始化失败；改用 WinPR 内置 MD4/RC4 并增加无外部 provider 的逐架构加密向量门禁 | 真机已完成 TCP、X.224、TLS 取证，失败点收敛到 NLA/NTLM；避免应用运行时依赖 Homebrew OpenSSL 模块目录 | Codex |
 | 2026-07-28 | 0.3.0 | 完成 Direct TLS/NLA 与首帧验收；修复代理 loopback 地址污染 NLA/SPN 服务器身份、分辨率本地化解析与持久化、Keychain 查询阻塞主线程；增加服务器地址映射、配置复制、分辨率边界和后台线程测试 | 用户确认 Direct 已连接，但完整代理 RDP 仍失败且分辨率无法保存；FreeRDP 3.30.0 源码和真机数据库取证确认根因 | Codex |
+| 2026-07-28 | 0.3.1 | 修复 loopback listener 在 accepted socket 进入 `.ready` 前被取消的竞态；增加真实 TCP 双向 relay、预读数据、单连接和停止后重启集成测试；完成分辨率真机持久化验收 | SOCKS5 已完成代理握手，但完整 RDP 在本地随机端口接入阶段失败；原生日志和源码确认 listener 生命周期早于 downstream TCP 握手结束 | Codex |
 
 ---
 

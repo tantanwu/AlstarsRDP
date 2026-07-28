@@ -152,16 +152,23 @@ public final class LoopbackTunnel: @unchecked Sendable {
             downstream.cancel()
             return
         }
-        configuration.listener.cancel()
         let taskID = UUID()
         guard let taskHandle = reserveTask(id: taskID, generation: generation) else {
+            configuration.listener.cancel()
             downstream.cancel()
+            forget(downstream)
             return
         }
         let task = Task { [weak self] in
-            guard let self else { downstream.cancel(); return }
+            guard let self else {
+                configuration.listener.cancel()
+                downstream.cancel()
+                configuration.connectedRoute.connection.cancel()
+                return
+            }
             let upstream = configuration.connectedRoute.connection
             defer {
+                configuration.listener.cancel()
                 downstream.cancel()
                 upstream.cancel()
                 self.forget(downstream)
@@ -170,6 +177,11 @@ public final class LoopbackTunnel: @unchecked Sendable {
             }
             do {
                 try await downstream.waitUntilReady(on: queue)
+                // Cancelling an NWListener from newConnectionHandler can tear down the
+                // accepted socket before its non-blocking TCP handshake is complete.
+                // Keep the listener alive until Network.framework confirms that the
+                // downstream socket is ready, then close it to enforce one-shot use.
+                configuration.listener.cancel()
                 if !configuration.connectedRoute.prefetchedTargetData.isEmpty {
                     try await downstream.sendAll(configuration.connectedRoute.prefetchedTargetData)
                 }
