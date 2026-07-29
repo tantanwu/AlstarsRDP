@@ -156,6 +156,7 @@
 "This Mac woke from sleep. Reconnect manually when ready." = "此 Mac 已从睡眠状态唤醒，请在准备就绪后手动重新连接。";
 "Network unavailable. Waiting for a usable network path…" = "网络不可用，正在等待可用的网络路径…";
 "Network restored. Reconnecting…" = "网络已恢复，正在重新连接…";
+"The server does not support live resizing. Reconnecting at %dx%d…" = "服务器不支持在线调整分辨率，正在以 %dx%d 重新连接…";
 "Folder redirection is not available until the bundled FreeRDP channel build has passed validation." = "在内置 FreeRDP 通道构建通过验证前，文件夹重定向暂不可用。";
 "About RemoteDesktop" = "关于 RemoteDesktop";
 "Settings…" = "设置…";

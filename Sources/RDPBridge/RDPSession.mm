@@ -376,7 +376,27 @@ static BOOL RDPPreConnect(freerdp *instance) {
             freerdp_register_addin_provider(freerdp_channels_load_static_addin_entry, 0);
     });
     if (RDPAddinProviderRegistrationStatus != CHANNEL_RC_OK) return FALSE;
-    return freerdp_client_load_addins(instance->context->channels, settings);
+
+    if (freerdp_settings_get_bool(settings, FreeRDP_SupportDisplayControl)) {
+        const char *displayChannel[] = { DISP_CHANNEL_NAME };
+        if (!freerdp_client_add_dynamic_channel(settings, ARRAYSIZE(displayChannel), displayChannel))
+            return FALSE;
+    }
+    if (freerdp_settings_get_bool(settings, FreeRDP_SupportGraphicsPipeline)) {
+        const char *graphicsChannel[] = { RDPGFX_CHANNEL_NAME };
+        if (!freerdp_client_add_dynamic_channel(settings, ARRAYSIZE(graphicsChannel), graphicsChannel))
+            return FALSE;
+    }
+
+    const BOOL addinsLoaded = freerdp_client_load_addins(instance->context->channels, settings);
+    const BOOL displayScheduled =
+        freerdp_dynamic_channel_collection_find(settings, DISP_CHANNEL_NAME) != nullptr;
+    const BOOL graphicsScheduled =
+        freerdp_dynamic_channel_collection_find(settings, RDPGFX_CHANNEL_NAME) != nullptr;
+    NSLog(@"[RDPDisplay] client dynamic channels: addins=%d disp=%d rdpgfx=%d count=%u",
+          addinsLoaded, displayScheduled, graphicsScheduled,
+          freerdp_settings_get_uint32(settings, FreeRDP_DynamicChannelCount));
+    return addinsLoaded;
 }
 
 static BOOL RDPPostConnect(freerdp *instance) {

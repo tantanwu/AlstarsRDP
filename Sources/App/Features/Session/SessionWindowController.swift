@@ -55,8 +55,12 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
     private var lastAdaptiveMetrics: AdaptiveDesktopMetrics?
     private var requestedAdaptiveMetrics: AdaptiveDesktopMetrics?
     private var adaptiveConfirmationTask: Task<Void, Never>?
+    private var adaptiveFallbackReconnectTask: Task<Void, Never>?
     private var adaptiveRetryCount = 0
     private var lastAdaptiveRequestTime: TimeInterval = 0
+    private var connectedAt: TimeInterval = 0
+    private var lastAdaptiveFallbackReconnectTime: TimeInterval = 0
+    private var adaptiveFallbackTargetMetrics: AdaptiveDesktopMetrics?
     private var displayControlActivated = false
     private var lastRemoteFrameWidth: UInt32 = 0
     private var lastRemoteFrameHeight: UInt32 = 0
@@ -471,6 +475,7 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
         connectionGeneration &+= 1
         permitsAutomaticReconnect = false
         reconnectWhenStopped = false
+        cancelAdaptiveReconnectFallback()
         retryTask?.cancel(); retryTask = nil
         connectTask?.cancel(); connectTask = nil
         clearEphemeralCredentials()
@@ -487,6 +492,7 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
         connectionGeneration &+= 1
         permitsAutomaticReconnect = false
         reconnectAttempt = 0
+        cancelAdaptiveReconnectFallback()
         retryTask?.cancel(); retryTask = nil
         connectTask?.cancel(); connectTask = nil
         reconnectWhenStopped = true
@@ -537,6 +543,7 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
         case .connecting: showStatus(NSLocalizedString("Negotiating TLS and authentication…", comment: "negotiating"), busy: true)
         case .connected:
             reconnectAttempt = 0
+            connectedAt = Date.timeIntervalSinceReferenceDate
             showStatus(NSLocalizedString("Connected. Waiting for the remote desktop…", comment: "waiting for first frame"), busy: true)
             window?.makeFirstResponder(canvas)
             scheduleAdaptiveResize(immediate: true)
@@ -565,7 +572,10 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
         let sizeChanged = width != lastRemoteFrameWidth || height != lastRemoteFrameHeight
         lastRemoteFrameWidth = width
         lastRemoteFrameHeight = height
-        if sizeChanged { updateRemoteSizeLabel() }
+        if sizeChanged {
+            updateRemoteSizeLabel()
+            reconcileAdaptiveReconnectFallback()
+        }
         progress.stopAnimation(nil)
         retryButton.isHidden = true
         statusOverlay.isHidden = true
@@ -620,6 +630,7 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
     func sessionDidActivateDisplayControl(_ session: RDPSession) {
         guard self.session === session else { return }
         displayControlActivated = true
+        cancelAdaptiveReconnectFallback()
         lastAdaptiveMetrics = nil
         lastResizeRejectionMetrics = nil
         recordAdaptiveDisplayEvent(
@@ -656,6 +667,7 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
         adaptiveResizeTask = nil
         adaptiveConfirmationTask?.cancel()
         adaptiveConfirmationTask = nil
+        cancelAdaptiveReconnectFallback()
         clearEphemeralCredentials()
         retryTask?.cancel(); retryTask = nil
         connectTask?.cancel(); connectTask = nil
@@ -699,6 +711,7 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
 
     private func finish(session finishedSession: RDPSession) {
         guard session === finishedSession else { return }
+        let preserveFallbackTarget = reconnectWhenStopped && adaptiveFallbackTargetMetrics != nil
         finishedSession.delegate = nil
         session = nil
         connectTask = nil
@@ -707,10 +720,14 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
         adaptiveResizeTask = nil
         adaptiveConfirmationTask?.cancel()
         adaptiveConfirmationTask = nil
+        adaptiveFallbackReconnectTask?.cancel()
+        adaptiveFallbackReconnectTask = nil
         lastAdaptiveMetrics = nil
         requestedAdaptiveMetrics = nil
         adaptiveRetryCount = 0
         lastAdaptiveRequestTime = 0
+        connectedAt = 0
+        if !preserveFallbackTarget { adaptiveFallbackTargetMetrics = nil }
         displayControlActivated = false
         lastResizeRejectionMetrics = nil
         lastRemoteFrameWidth = 0
@@ -861,6 +878,9 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
                     fields: ["displayControlActive": .boolean(self.displayControlActivated)]
                 )
             }
+            if !sent, !self.displayControlActivated {
+                self.scheduleAdaptiveReconnectFallback(for: metrics)
+            }
             if self.adaptiveResizeGeneration == generation {
                 self.adaptiveResizeTask = nil
             }
@@ -908,6 +928,87 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
             )
             self.scheduleAdaptiveResize(immediate: true)
         }
+    }
+
+    private func reconcileAdaptiveReconnectFallback() {
+        guard profile.display.scaleMode == .dynamicResolution,
+              !displayControlActivated,
+              let metrics = currentAdaptiveMetrics() else { return }
+        if AdaptiveResizeFallback.requiresReconnect(
+            target: metrics,
+            remoteWidth: lastRemoteFrameWidth,
+            remoteHeight: lastRemoteFrameHeight
+        ) {
+            scheduleAdaptiveReconnectFallback(for: metrics)
+        } else if adaptiveFallbackTargetMetrics == metrics {
+            cancelAdaptiveReconnectFallback()
+        }
+    }
+
+    private func scheduleAdaptiveReconnectFallback(for metrics: AdaptiveDesktopMetrics) {
+        guard !isClosing,
+              !displayControlActivated,
+              AdaptiveResizeFallback.requiresReconnect(
+                target: metrics,
+                remoteWidth: lastRemoteFrameWidth,
+                remoteHeight: lastRemoteFrameHeight
+              ) else { return }
+
+        adaptiveFallbackTargetMetrics = metrics
+        adaptiveFallbackReconnectTask?.cancel()
+        let now = Date.timeIntervalSinceReferenceDate
+        let delay = AdaptiveResizeFallback.reconnectDelay(
+            connectedAt: connectedAt,
+            lastReconnectAt: lastAdaptiveFallbackReconnectTime,
+            now: now
+        )
+        adaptiveFallbackReconnectTask = Task { [weak self] in
+            do { try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000)) }
+            catch { return }
+            guard let self,
+                  !self.isClosing,
+                  !self.displayControlActivated,
+                  self.adaptiveFallbackTargetMetrics == metrics,
+                  self.currentAdaptiveMetrics() == metrics,
+                  let session = self.session,
+                  session.state == .connected,
+                  AdaptiveResizeFallback.requiresReconnect(
+                    target: metrics,
+                    remoteWidth: self.lastRemoteFrameWidth,
+                    remoteHeight: self.lastRemoteFrameHeight
+                  ) else { return }
+
+            self.adaptiveFallbackReconnectTask = nil
+            self.lastAdaptiveFallbackReconnectTime = Date.timeIntervalSinceReferenceDate
+            self.connectionGeneration &+= 1
+            self.reconnectWhenStopped = true
+            self.releaseAllKeys()
+            self.recordAdaptiveDisplayEvent(
+                level: .warning,
+                code: "RDP_RESIZE_RECONNECT_FALLBACK",
+                message: "Display Control is unavailable; reconnecting with the requested desktop size.",
+                metrics: metrics,
+                fields: [
+                    "remoteWidth": .number(Double(self.lastRemoteFrameWidth)),
+                    "remoteHeight": .number(Double(self.lastRemoteFrameHeight))
+                ]
+            )
+            self.showStatus(
+                String(
+                    format: NSLocalizedString("The server does not support live resizing. Reconnecting at %dx%d…", comment: "legacy resize reconnect"),
+                    metrics.width,
+                    metrics.height
+                ),
+                busy: true
+            )
+            session.disconnect()
+        }
+    }
+
+    private func cancelAdaptiveReconnectFallback(clearTarget: Bool = true) {
+        adaptiveFallbackReconnectTask?.cancel()
+        adaptiveFallbackReconnectTask = nil
+        if clearTarget { adaptiveFallbackTargetMetrics = nil }
     }
 
     private func updateRemoteSizeLabel() {

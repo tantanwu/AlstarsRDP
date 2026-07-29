@@ -56,6 +56,59 @@ final class AdaptiveDisplayTests: XCTestCase {
         XCTAssertNil(DisplayResolutionPreset.index(width: 1_366, height: 768))
     }
 
+    func testLegacyResizeFallbackWaitsForActivationAndRateLimitsReconnects() {
+        XCTAssertEqual(
+            AdaptiveResizeFallback.reconnectDelay(
+                connectedAt: 100,
+                lastReconnectAt: 0,
+                now: 101
+            ),
+            1.5,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            AdaptiveResizeFallback.reconnectDelay(
+                connectedAt: 90,
+                lastReconnectAt: 99,
+                now: 100
+            ),
+            3,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            AdaptiveResizeFallback.reconnectDelay(
+                connectedAt: 90,
+                lastReconnectAt: 0,
+                now: 100
+            ),
+            0.75,
+            accuracy: 0.001
+        )
+    }
+
+    func testLegacyResizeFallbackRequiresKnownDifferentRemoteSize() throws {
+        let target = try XCTUnwrap(AdaptiveDisplaySizing.metrics(
+            canvasSizeInPoints: CGSize(width: 1_200, height: 800),
+            backingScaleFactor: 1
+        ))
+
+        XCTAssertFalse(AdaptiveResizeFallback.requiresReconnect(
+            target: target,
+            remoteWidth: 0,
+            remoteHeight: 0
+        ))
+        XCTAssertFalse(AdaptiveResizeFallback.requiresReconnect(
+            target: target,
+            remoteWidth: 1_200,
+            remoteHeight: 800
+        ))
+        XCTAssertTrue(AdaptiveResizeFallback.requiresReconnect(
+            target: target,
+            remoteWidth: 1_180,
+            remoteHeight: 712
+        ))
+    }
+
     func testSessionWindowUsesNativeFullScreenBehavior() async {
         await MainActor.run {
             let profile = ConnectionProfile(

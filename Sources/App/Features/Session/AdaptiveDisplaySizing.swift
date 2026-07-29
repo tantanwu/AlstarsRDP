@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 import RDPDomain
 
 struct AdaptiveDesktopMetrics: Equatable {
@@ -61,5 +62,34 @@ enum AdaptiveDisplaySizing {
             physicalWidth: min(10_000, max(10, physicalWidth)),
             physicalHeight: min(10_000, max(10, physicalHeight))
         )
+    }
+}
+
+enum AdaptiveResizeFallback {
+    static let displayControlActivationGrace: TimeInterval = 2.5
+    static let reconnectDebounce: TimeInterval = 0.75
+    static let minimumReconnectInterval: TimeInterval = 4
+
+    static func reconnectDelay(
+        connectedAt: TimeInterval,
+        lastReconnectAt: TimeInterval,
+        now: TimeInterval
+    ) -> TimeInterval {
+        let activationDelay = connectedAt > 0
+            ? max(0, displayControlActivationGrace - max(0, now - connectedAt))
+            : displayControlActivationGrace
+        let rateLimitDelay = lastReconnectAt > 0
+            ? max(0, minimumReconnectInterval - max(0, now - lastReconnectAt))
+            : 0
+        return max(reconnectDebounce, activationDelay, rateLimitDelay)
+    }
+
+    static func requiresReconnect(
+        target: AdaptiveDesktopMetrics,
+        remoteWidth: UInt32,
+        remoteHeight: UInt32
+    ) -> Bool {
+        guard remoteWidth > 0, remoteHeight > 0 else { return false }
+        return target.width != remoteWidth || target.height != remoteHeight
     }
 }
