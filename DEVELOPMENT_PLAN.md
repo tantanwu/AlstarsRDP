@@ -842,7 +842,9 @@ RemoteDesktop/
 - 刘海根因与修复：旧布局把四个按钮、可伸缩空白和具有 required hugging 的尺寸标签放在同一个 `NSStackView`，macOS 11 下按钮可能被压缩并被容器裁剪。操作按钮现使用独立固定宽度 stack，尺寸标签独立靠右约束；按钮固定 `28x28`、required 抗压缩、白色模板 tint 和可见背景；全屏展开尺寸调整为 `388x42`，收起仍为顶部中央 `72x8`。
 - 协议确认根因与修复：旧桥接在 `SendMonitorLayout` 返回成功后立即覆盖 `FreeRDP_DesktopWidth/Height` 和缩放设置，这不代表服务器已接受布局，并可能制造假确认。现已删除本地覆盖；仅在服务器触发 FreeRDP `DesktopResize`、且 `gdi_resize` 成功后回调 Swift 层，将服务器报告尺寸作为唯一协议确认。渲染帧尺寸继续用于画面检查，但不再确认动态分辨率请求。
 - 节流与诊断：所有 Monitor Layout 请求额外保证至少间隔 500 ms；服务器精确应用、返回不同尺寸或多次未确认分别记录 `RDP_RESIZE_CONFIRMED`、`RDP_RESIZE_SERVER_ADJUSTED` 和 `RDP_RESIZE_NOT_CONFIRMED`。刘海尺寸标签优先显示服务器确认尺寸，并在请求待确认时显示“当前尺寸 > 请求尺寸”。
-- 自动化状态：已补充四个按钮在展开刘海内可见、未裁剪、与最大长度尺寸标签不重叠的 AppKit 回归断言；Windows 工作区动态调整仍需 GitHub 双架构构建及 macOS 11 + 真实 Windows 复验后才能关闭 BUG-011。
+- 自动化状态：已补充四个按钮在展开刘海内可见、未裁剪、与最大长度尺寸标签不重叠的 AppKit 回归断言。提交 `ad7dc7a` 的 GitHub Actions [30411709387](https://github.com/tantanwu/AlstarsRDP/actions/runs/30411709387) 全绿，双架构 Swift/FreeRDP、Universal 2 Release、AppKit/桥接/渲染测试、ad-hoc 签名及打包门禁均通过；Windows 工作区动态调整仍需真实会话复验后才能关闭 BUG-011。
+- 构建产物：artifact ID `8708704612`；GitHub 外层 SHA-256 为 `d0055ebc083ddba758ea8f5bba764197b5b45c53264666389d5da2eaa42e0c1b`，内层应用 ZIP SHA-256 为 `4ac2b8a57215a7fb36287435bea29820336d3546bfb6a91901d54f46e7317231`。下载文件与 GitHub 摘要一致。
+- macOS 11 部署：产物已部署到 `/Users/jerry/AlstarsRDP-validation/run-30411709387/unpacked/RemoteDesktop.app`，未覆盖或终止旧版本。macOS 11.7.10 Intel 上严格 codesign、`x86_64 arm64`、最低系统 11.0、进程启动和无 error 级统一日志均通过；辅助功能树确认会话窗口中的断开、重连、全屏和 Ctrl+Alt+Delete 四个按钮均存在、标签正确且具有非零尺寸。全屏悬停和真实 Windows `DesktopResize` 仍待用户复验。
 - 行为边界：RDP Display Control 调整的是 Windows 远程桌面/工作区尺寸。最大化窗口和响应式应用会随工作区变化；普通浮动窗口按 Windows 既有行为保持自身窗口大小，客户端不能强制所有远程应用自动放大或重新布局。
 
 ### 14.4 每周状态模板
