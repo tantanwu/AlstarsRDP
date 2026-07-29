@@ -772,7 +772,7 @@ RemoteDesktop/
 | BUG-008 | P1 | 修改分辨率后无法保存，重新打开仍为旧值 | 宽高继续使用 `NSTextField.integerValue` 和 clamping 转换，未采用端口修复后的严格无分组字符串路径 | 加载使用无分组十进制字符串；保存严格拒绝分组、小数、负数、空值、越界和超像素上限输入；增加解析回归测试 | 已修复；CI 通过，macOS 11 真机保存、关闭并重开编辑器验证通过 |
 | BUG-009 | P2 | 打开设置或连接时，Keychain 授权查询可能阻塞 AppKit 主线程 | 同步 `SecItemCopyMatching` 从主 actor 调用 | 通过 `Task.detached` 后台读取，主线程仅消费结果；增加线程回归测试 | 已修复；双架构 CI 与 macOS 11 后台线程测试通过 |
 | BUG-010 | P1 | 分辨率设置不直观，远程窗口不能进入全屏，“动态分辨率”不会随本地窗口变化 | 配置只在连接前设置 `DynamicResolutionUpdate` 布尔值，没有接入 Display Control 通道、发送 Monitor Layout 更新或监听窗口事件；创建窗口时错误地预置 `.fullScreen` 状态位，且没有标准全屏菜单行为 | 接入 RDPEDISP Display Control；按画布 backing pixels、DPI 和协议边界计算尺寸，拖动去抖并在屏幕/全屏变化后立即同步；改用 `.fullScreenPrimary` 和标准快捷键；显示设置增加常用分辨率与“跟随窗口”模式 | 代码、双架构 CI、Universal 2 产物和 macOS 11 启动验证已完成；真实 RDP 窗口拖动与全屏效果待用户验收 |
-| BUG-011 | P1 | macOS 11 会话窗口的断开/全屏图标不可见；全屏顶部仍被整条工具栏占用；跟随窗口看不到 Windows 分辨率变化 | 两个 SF Symbol 在 macOS 11 返回 `nil` 后被空图片替代；全屏沿用普通窗口工具栏布局；桥接依赖 FreeRDP 的隐式 Display Control 默认值，且 UI 没有区分“布局已发送”和“远端 framebuffer 已改变” | 改用 macOS 11 可用符号和 AppKit 模板兜底并固定图标尺寸；全屏画布铺顶，顶部中央仅保留 `72x8` 悬浮触发条，悬停展开、移开延迟收起；显式同时开启 `SupportDisplayControl`/`DynamicResolutionUpdate`，显示远端实际帧尺寸并对未确认请求记录诊断和有限重试 | 代码、双架构 CI、Universal 2 签名门禁及 macOS 11 启动已通过；待全屏交互和真实 Windows 动态分辨率验收 |
+| BUG-011 | P1 | macOS 11 会话窗口的断开/全屏图标不可见；全屏顶部仍被整条工具栏占用；跟随窗口看不到 Windows 分辨率变化 | 两个 SF Symbol 在 macOS 11 返回 `nil` 后被空图片替代；全屏沿用普通窗口工具栏布局；桥接未初始化已启用的 FreeRDP RDPGFX 图形管线，因而服务器 `ResetGraphics` 无法进入 GDI `DesktopResize`，也未订阅 `GraphicsReset` 作为服务器尺寸确认 | 改用 macOS 11 可用符号和 AppKit 模板兜底并固定图标尺寸；全屏画布铺顶并使用自动收起的小刘海；显式初始化/释放 RDPGFX GDI 管线，同时监听 `DesktopResize` 与 `GraphicsReset`，显示服务器实际尺寸并记录持久化诊断 | 图标、刘海和先前桥接版本已通过双架构 CI；RDPGFX 修复待新 CI、macOS 11 部署和真实 Windows 动态分辨率验收，不能提前关闭 |
 
 ### 14.3.4 代理与空白会话修复证据
 
@@ -846,6 +846,15 @@ RemoteDesktop/
 - 构建产物：artifact ID `8708704612`；GitHub 外层 SHA-256 为 `d0055ebc083ddba758ea8f5bba764197b5b45c53264666389d5da2eaa42e0c1b`，内层应用 ZIP SHA-256 为 `4ac2b8a57215a7fb36287435bea29820336d3546bfb6a91901d54f46e7317231`。下载文件与 GitHub 摘要一致。
 - macOS 11 部署：产物已部署到 `/Users/jerry/AlstarsRDP-validation/run-30411709387/unpacked/RemoteDesktop.app`，未覆盖或终止旧版本。macOS 11.7.10 Intel 上严格 codesign、`x86_64 arm64`、最低系统 11.0、进程启动和无 error 级统一日志均通过；辅助功能树确认会话窗口中的断开、重连、全屏和 Ctrl+Alt+Delete 四个按钮均存在、标签正确且具有非零尺寸。全屏悬停和真实 Windows `DesktopResize` 仍待用户复验。
 - 行为边界：RDP Display Control 调整的是 Windows 远程桌面/工作区尺寸。最大化窗口和响应式应用会随工作区变化；普通浮动窗口按 Windows 既有行为保持自身窗口大小，客户端不能强制所有远程应用自动放大或重新布局。
+
+### 14.3.11 RDPGFX 图形管线与动态分辨率闭环修复
+
+- 用户复验：运行 `30411709387` 产物后，改变本地窗口大小、进入或退出全屏时 Windows 桌面分辨率均没有变化。真机配置数据库确认当前 profile 的 `scaleMode` 为 `dynamicResolution`，固定宽高为 `1920x1080`，排除“跟随窗口未保存或未启用”。BUG-011 继续保持未完成。
+- 已证实协议缺口：桥接显式启用了 `FreeRDP_SupportGraphicsPipeline`，但只接入 Display Control (`disp`) 动态通道，没有在 `Microsoft::Windows::RDS::Graphics` (`rdpgfx`) 通道连接时调用 `gdi_graphics_pipeline_init`。服务器返回 `ResetGraphics` PDU 时没有安装 GDI `ResetGraphics` 回调，因此新的 `width/height` 无法更新 settings、重建 framebuffer 或触发应用的 `DesktopResize`。
+- 修复实现：桥接同时处理 `DISP_DVC_CHANNEL_NAME` 与 `RDPGFX_DVC_CHANNEL_NAME`；RDPGFX 连接后显式绑定 GDI 管线，断开和 `PostDisconnect` 时幂等释放；订阅 FreeRDP `GraphicsReset` PubSub 事件，并与经典 `DesktopResize` 统一去重后向 Swift 层发布服务器实际桌面尺寸。
+- 生命周期依据：FreeRDP 3.30.0 在 `PostConnect` 的 `gdi_init` 之后才执行通道 post-connect，因此 RDPGFX 连接时 GDI 已可用；`rdpgfx_recv_reset_graphics_pdu` 先调用 GDI `ResetGraphics`，随后发布 `GraphicsResetEventArgs`。自定义 `RDPAppContext` 不能直接转发官方 `freerdp_client_OnChannelConnectedEventHandler`，因为该函数会把 context 强转为更大的 `rdpClientContext`，所以本项目只显式接入所需 RDPGFX 生命周期。
+- 诊断闭环：使用 `[RDPDisplay]` 统一日志持久记录 Display Control 连接、能力激活、布局发送状态、RDPGFX 初始化结果和服务器返回尺寸。新构建真机复验时必须看到 `Display Control activated`、`layout ... send status=0`，并最终看到 `server desktop DesktopResize` 或 `server desktop GraphicsReset`；缺少任一环节均不能将请求视为生效。
+- 当前状态：代码审查与 Windows 工作区复验失败记录已完成；双架构编译、Universal 2 打包、macOS 11 启动及真实 Windows 窗口/全屏动态分辨率仍待完成。
 
 ### 14.4 每周状态模板
 
@@ -997,6 +1006,7 @@ RemoteDesktop/
 | 2026-07-28 | 0.3.0 | 完成 Direct TLS/NLA 与首帧验收；修复代理 loopback 地址污染 NLA/SPN 服务器身份、分辨率本地化解析与持久化、Keychain 查询阻塞主线程；增加服务器地址映射、配置复制、分辨率边界和后台线程测试 | 用户确认 Direct 已连接，但完整代理 RDP 仍失败且分辨率无法保存；FreeRDP 3.30.0 源码和真机数据库取证确认根因 | Codex |
 | 2026-07-28 | 0.3.1 | 修复 loopback listener 在 accepted socket 进入 `.ready` 前被取消的竞态；增加真实 TCP 双向 relay、预读数据、单连接和停止后重启集成测试；完成分辨率真机持久化验收 | SOCKS5 已完成代理握手，但完整 RDP 在本地随机端口接入阶段失败；原生日志和源码确认 listener 生命周期早于 downstream TCP 握手结束 | Codex |
 | 2026-07-29 | 0.3.2 | 修复 macOS 11 会话图标为空；全屏工具栏改为顶部中央自动收起的小刘海；显式启用 FreeRDP Display Control；增加远端帧尺寸确认、有限重试、诊断和 AppKit 回归测试 | 用户确认代理可连接后反馈全屏顶部仍占空间、图标不可见，且跟随窗口未体现 Windows 端分辨率变化；macOS 11 与 FreeRDP 3.30.0 源码取证确认兼容和可观测性缺口 | Codex |
+| 2026-07-29 | 0.3.3 | 初始化并幂等释放 FreeRDP RDPGFX GDI 图形管线；订阅 `GraphicsReset`，与经典 `DesktopResize` 统一发布服务器实际尺寸；增加 Display Control/RDPGFX 持久化诊断 | 用户复验确认窗口和全屏均不改变远端分辨率；真机 profile 排除设置问题，FreeRDP 3.30.0 源码确认已启用 RDPGFX 却未安装 GDI 回调的协议缺口 | Codex |
 
 ---
 

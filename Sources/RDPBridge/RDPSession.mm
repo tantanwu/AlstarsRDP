@@ -9,13 +9,16 @@
 #include <freerdp/client.h>
 #include <freerdp/addin.h>
 #include <freerdp/channels/disp.h>
+#include <freerdp/channels/rdpgfx.h>
 #include <freerdp/client/channels.h>
 #include <freerdp/client/disp.h>
+#include <freerdp/client/rdpgfx.h>
 #include <freerdp/client/cmdline.h>
 #include <freerdp/codec/color.h>
 #include <freerdp/freerdp.h>
 #include <freerdp/event.h>
 #include <freerdp/gdi/gdi.h>
+#include <freerdp/gdi/gfx.h>
 #include <freerdp/input.h>
 #include <freerdp/scancode.h>
 #include <freerdp/settings.h>
@@ -111,11 +114,16 @@ typedef struct {
     __unsafe_unretained RDPSession *owner;
     BOOL gdiInitialized;
     BOOL channelEventsSubscribed;
+    BOOL graphicsResetSubscribed;
     DispClientContext *displayControl;
     BOOL displayControlActivated;
+    RdpgfxClientContext *graphicsPipeline;
+    BOOL graphicsPipelineInitialized;
     UINT32 maxNumMonitors;
     UINT32 maxMonitorAreaFactorA;
     UINT32 maxMonitorAreaFactorB;
+    UINT32 lastPublishedDesktopWidth;
+    UINT32 lastPublishedDesktopHeight;
 } RDPAppContext;
 
 @interface RDPSession () {
@@ -152,8 +160,12 @@ typedef struct {
 - (void)displayControlActivated:(DispClientContext *)displayControl
                         context:(RDPAppContext *)context
                  maxNumMonitors:(UINT32)maxNumMonitors
-          maxMonitorAreaFactorA:(UINT32)maxMonitorAreaFactorA
-          maxMonitorAreaFactorB:(UINT32)maxMonitorAreaFactorB;
+           maxMonitorAreaFactorA:(UINT32)maxMonitorAreaFactorA
+           maxMonitorAreaFactorB:(UINT32)maxMonitorAreaFactorB;
+- (void)graphicsPipelineConnected:(RdpgfxClientContext *)graphicsPipeline
+                           context:(RDPAppContext *)context;
+- (void)graphicsPipelineDisconnected:(RdpgfxClientContext *)graphicsPipeline
+                              context:(RDPAppContext *)context;
 - (void)captureFailureDetailsForInstance:(freerdp *)instance
                                errorCode:(uint32_t)errorCode
                          systemErrorCode:(uint32_t)systemErrorCode
@@ -198,6 +210,18 @@ static RDPAppContext *RDPContextFromInstance(freerdp *instance) {
     return instance && instance->context ? reinterpret_cast<RDPAppContext *>(instance->context) : nullptr;
 }
 
+static void RDPPublishDesktopResize(RDPAppContext *context, UINT32 width, UINT32 height,
+                                    NSString *source) {
+    if (!context || width == 0 || height == 0) return;
+    if (context->lastPublishedDesktopWidth == width &&
+        context->lastPublishedDesktopHeight == height) return;
+    context->lastPublishedDesktopWidth = width;
+    context->lastPublishedDesktopHeight = height;
+    NSLog(@"[RDPDisplay] server desktop %@: %ux%u", source, width, height);
+    RDPSession *owner = context->owner;
+    if (owner) [owner publishDesktopResizeWithWidth:width height:height];
+}
+
 static UINT RDPDisplayControlCaps(DispClientContext *displayControl, UINT32 maxNumMonitors,
                                   UINT32 maxMonitorAreaFactorA,
                                   UINT32 maxMonitorAreaFactorB) {
@@ -205,6 +229,8 @@ static UINT RDPDisplayControlCaps(DispClientContext *displayControl, UINT32 maxN
     RDPAppContext *context = static_cast<RDPAppContext *>(displayControl->custom);
     RDPSession *owner = context->owner;
     if (!owner) return CHANNEL_RC_BAD_CHANNEL;
+    NSLog(@"[RDPDisplay] capabilities: monitors=%u area=%ux%u",
+          maxNumMonitors, maxMonitorAreaFactorA, maxMonitorAreaFactorB);
     [owner displayControlActivated:displayControl
                            context:context
                     maxNumMonitors:maxNumMonitors
@@ -214,25 +240,41 @@ static UINT RDPDisplayControlCaps(DispClientContext *displayControl, UINT32 maxN
 }
 
 static void RDPChannelConnected(void *contextValue, const ChannelConnectedEventArgs *event) {
-    if (!contextValue || !event || !event->name || !event->pInterface ||
-        strcmp(event->name, DISP_DVC_CHANNEL_NAME) != 0) return;
+    if (!contextValue || !event || !event->name || !event->pInterface) return;
     RDPAppContext *context = static_cast<RDPAppContext *>(contextValue);
     RDPSession *owner = context->owner;
-    if (owner) {
+    if (!owner) return;
+    if (strcmp(event->name, DISP_DVC_CHANNEL_NAME) == 0) {
+        NSLog(@"[RDPDisplay] Display Control channel connected");
         [owner displayControlConnected:static_cast<DispClientContext *>(event->pInterface)
-                               context:context];
+                                context:context];
+    } else if (strcmp(event->name, RDPGFX_DVC_CHANNEL_NAME) == 0) {
+        NSLog(@"[RDPDisplay] Graphics Pipeline channel connected");
+        [owner graphicsPipelineConnected:static_cast<RdpgfxClientContext *>(event->pInterface)
+                                  context:context];
     }
 }
 
 static void RDPChannelDisconnected(void *contextValue, const ChannelDisconnectedEventArgs *event) {
-    if (!contextValue || !event || !event->name || !event->pInterface ||
-        strcmp(event->name, DISP_DVC_CHANNEL_NAME) != 0) return;
+    if (!contextValue || !event || !event->name || !event->pInterface) return;
     RDPAppContext *context = static_cast<RDPAppContext *>(contextValue);
     RDPSession *owner = context->owner;
-    if (owner) {
+    if (!owner) return;
+    if (strcmp(event->name, DISP_DVC_CHANNEL_NAME) == 0) {
+        NSLog(@"[RDPDisplay] Display Control channel disconnected");
         [owner displayControlDisconnected:static_cast<DispClientContext *>(event->pInterface)
-                                  context:context];
+                                   context:context];
+    } else if (strcmp(event->name, RDPGFX_DVC_CHANNEL_NAME) == 0) {
+        NSLog(@"[RDPDisplay] Graphics Pipeline channel disconnected");
+        [owner graphicsPipelineDisconnected:static_cast<RdpgfxClientContext *>(event->pInterface)
+                                     context:context];
     }
+}
+
+static void RDPGraphicsReset(void *contextValue, const GraphicsResetEventArgs *event) {
+    if (!contextValue || !event) return;
+    RDPAppContext *context = static_cast<RDPAppContext *>(contextValue);
+    RDPPublishDesktopResize(context, event->width, event->height, @"GraphicsReset");
 }
 
 static BOOL RDPContextNew(freerdp *instance, rdpContext *context) {
@@ -240,6 +282,17 @@ static BOOL RDPContextNew(freerdp *instance, rdpContext *context) {
     RDPAppContext *appContext = reinterpret_cast<RDPAppContext *>(context);
     appContext->owner = nil;
     appContext->gdiInitialized = NO;
+    appContext->channelEventsSubscribed = NO;
+    appContext->graphicsResetSubscribed = NO;
+    appContext->displayControl = nullptr;
+    appContext->displayControlActivated = NO;
+    appContext->graphicsPipeline = nullptr;
+    appContext->graphicsPipelineInitialized = NO;
+    appContext->maxNumMonitors = 0;
+    appContext->maxMonitorAreaFactorA = 0;
+    appContext->maxMonitorAreaFactorB = 0;
+    appContext->lastPublishedDesktopWidth = 0;
+    appContext->lastPublishedDesktopHeight = 0;
     return TRUE;
 }
 
@@ -251,8 +304,13 @@ static void RDPContextFree(freerdp *instance, rdpContext *context) {
         PubSub_UnsubscribeChannelConnected(context->pubSub, RDPChannelConnected);
         PubSub_UnsubscribeChannelDisconnected(context->pubSub, RDPChannelDisconnected);
     }
+    if (appContext->graphicsResetSubscribed && context->pubSub) {
+        PubSub_UnsubscribeGraphicsReset(context->pubSub, RDPGraphicsReset);
+    }
     appContext->displayControl = nullptr;
     appContext->displayControlActivated = NO;
+    appContext->graphicsPipeline = nullptr;
+    appContext->graphicsPipelineInitialized = NO;
     appContext->owner = nil;
 }
 
@@ -277,8 +335,7 @@ static BOOL RDPDesktopResize(rdpContext *context) {
     const UINT32 height = freerdp_settings_get_uint32(context->settings, FreeRDP_DesktopHeight);
     if (!gdi_resize(context->gdi, width, height)) return FALSE;
     RDPAppContext *appContext = reinterpret_cast<RDPAppContext *>(context);
-    RDPSession *owner = appContext->owner;
-    if (owner) [owner publishDesktopResizeWithWidth:width height:height];
+    RDPPublishDesktopResize(appContext, width, height, @"DesktopResize");
     return TRUE;
 }
 
@@ -297,6 +354,15 @@ static BOOL RDPPreConnect(freerdp *instance) {
             return FALSE;
         }
         appContext->channelEventsSubscribed = YES;
+    }
+    if (!appContext->graphicsResetSubscribed) {
+        if (PubSub_SubscribeGraphicsReset(instance->context->pubSub, RDPGraphicsReset) < 0) {
+            PubSub_UnsubscribeChannelConnected(instance->context->pubSub, RDPChannelConnected);
+            PubSub_UnsubscribeChannelDisconnected(instance->context->pubSub, RDPChannelDisconnected);
+            appContext->channelEventsSubscribed = NO;
+            return FALSE;
+        }
+        appContext->graphicsResetSubscribed = YES;
     }
     rdpSettings *settings = instance->context->settings;
     if (!freerdp_settings_set_bool(settings, FreeRDP_CertificateCallbackPreferPEM, TRUE) ||
@@ -325,6 +391,13 @@ static BOOL RDPPostConnect(freerdp *instance) {
 static void RDPPostDisconnect(freerdp *instance) {
     RDPAppContext *context = RDPContextFromInstance(instance);
     if (context && context->gdiInitialized) {
+        if (context->graphicsPipelineInitialized && context->graphicsPipeline) {
+            gdi_graphics_pipeline_uninit(
+                instance->context->gdi, context->graphicsPipeline
+            );
+            context->graphicsPipelineInitialized = NO;
+            context->graphicsPipeline = nullptr;
+        }
         gdi_free(instance);
         context->gdiInitialized = NO;
     }
@@ -597,7 +670,10 @@ static bool RDPStateCanTransition(RDPNativeSessionState from, RDPNativeSessionSt
 
 - (void)displayControlConnected:(DispClientContext *)displayControl
                          context:(RDPAppContext *)context {
-    if (!displayControl || !_configuration.dynamicResolution) return;
+    if (!displayControl || !_configuration.dynamicResolution) {
+        NSLog(@"[RDPDisplay] Display Control ignored: dynamic resolution disabled");
+        return;
+    }
     std::lock_guard<std::mutex> guard(_instanceMutex);
     if (!context) return;
     context->displayControl = displayControl;
@@ -622,6 +698,36 @@ static bool RDPStateCanTransition(RDPNativeSessionState from, RDPNativeSessionSt
     context->displayControlActivated = NO;
 }
 
+- (void)graphicsPipelineConnected:(RdpgfxClientContext *)graphicsPipeline
+                           context:(RDPAppContext *)context {
+    if (!graphicsPipeline || !context) return;
+    std::lock_guard<std::mutex> guard(_instanceMutex);
+    if (!context->gdiInitialized || !context->context.gdi) {
+        NSLog(@"[RDPDisplay] Graphics Pipeline initialization skipped: GDI is unavailable");
+        return;
+    }
+    if (context->graphicsPipelineInitialized) return;
+    context->graphicsPipeline = graphicsPipeline;
+    context->graphicsPipelineInitialized = gdi_graphics_pipeline_init(
+        context->context.gdi, graphicsPipeline
+    );
+    NSLog(@"[RDPDisplay] Graphics Pipeline initialization %@",
+          context->graphicsPipelineInitialized ? @"succeeded" : @"failed");
+    if (!context->graphicsPipelineInitialized) context->graphicsPipeline = nullptr;
+}
+
+- (void)graphicsPipelineDisconnected:(RdpgfxClientContext *)graphicsPipeline
+                              context:(RDPAppContext *)context {
+    if (!graphicsPipeline || !context) return;
+    std::lock_guard<std::mutex> guard(_instanceMutex);
+    if (context->graphicsPipeline != graphicsPipeline) return;
+    if (context->graphicsPipelineInitialized && context->context.gdi) {
+        gdi_graphics_pipeline_uninit(context->context.gdi, graphicsPipeline);
+    }
+    context->graphicsPipeline = nullptr;
+    context->graphicsPipelineInitialized = NO;
+}
+
 - (void)displayControlActivated:(DispClientContext *)displayControl
                         context:(RDPAppContext *)context
                  maxNumMonitors:(UINT32)maxNumMonitors
@@ -637,6 +743,7 @@ static bool RDPStateCanTransition(RDPNativeSessionState from, RDPNativeSessionSt
         context->maxMonitorAreaFactorA = maxMonitorAreaFactorA;
         context->maxMonitorAreaFactorB = maxMonitorAreaFactorB;
     }
+    NSLog(@"[RDPDisplay] Display Control activated");
     if (!shouldNotify) return;
     id<RDPSessionDelegate> delegate = self.delegate;
     if (!delegate) return;
@@ -661,18 +768,29 @@ static bool RDPStateCanTransition(RDPNativeSessionState from, RDPNativeSessionSt
         physicalHeight > DISPLAY_CONTROL_MAX_PHYSICAL_MONITOR_HEIGHT ||
         desktopScaleFactor < 100 || desktopScaleFactor > 500 ||
         (deviceScaleFactor != 100 && deviceScaleFactor != 140 && deviceScaleFactor != 180)) {
+        NSLog(@"[RDPDisplay] layout rejected locally: invalid %ux%u scale=%u/%u physical=%ux%u",
+              width, height, desktopScaleFactor, deviceScaleFactor, physicalWidth, physicalHeight);
         return NO;
     }
 
     std::lock_guard<std::mutex> guard(_instanceMutex);
-    if (_nativeState.load() != RDPNativeSessionStateConnected) return NO;
+    if (_nativeState.load() != RDPNativeSessionStateConnected) {
+        NSLog(@"[RDPDisplay] layout rejected locally: session is not connected");
+        return NO;
+    }
     RDPAppContext *context = RDPContextFromInstance(_instance);
     if (!context || !context->displayControlActivated || context->maxNumMonitors < 1 ||
-        !context->displayControl || !context->displayControl->SendMonitorLayout) return NO;
+        !context->displayControl || !context->displayControl->SendMonitorLayout) {
+        NSLog(@"[RDPDisplay] layout rejected locally: Display Control is unavailable or inactive");
+        return NO;
+    }
     if (context->maxMonitorAreaFactorA > 0 && context->maxMonitorAreaFactorB > 0) {
         const uint64_t maximumArea = static_cast<uint64_t>(context->maxMonitorAreaFactorA) *
                                      static_cast<uint64_t>(context->maxMonitorAreaFactorB);
-        if (static_cast<uint64_t>(width) * static_cast<uint64_t>(height) > maximumArea) return NO;
+        if (static_cast<uint64_t>(width) * static_cast<uint64_t>(height) > maximumArea) {
+            NSLog(@"[RDPDisplay] layout rejected locally: %ux%u exceeds server area", width, height);
+            return NO;
+        }
     }
 
     DISPLAY_CONTROL_MONITOR_LAYOUT layout = {};
@@ -689,6 +807,8 @@ static bool RDPStateCanTransition(RDPNativeSessionState from, RDPNativeSessionSt
     const UINT status = context->displayControl->SendMonitorLayout(
         context->displayControl, 1, &layout
     );
+    NSLog(@"[RDPDisplay] layout %ux%u scale=%u/%u send status=%u",
+          width, height, desktopScaleFactor, deviceScaleFactor, status);
     return status == CHANNEL_RC_OK;
 }
 
