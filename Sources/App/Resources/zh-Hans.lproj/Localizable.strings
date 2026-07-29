@@ -173,4 +173,7 @@
 "Cancel Test" = "取消测试";
 "Connection path succeeded" = "连接路径测试成功";
 "Stage: %@\nElapsed: %d ms\nCertificate identity: %@" = "阶段：%@\n耗时：%d 毫秒\n证书身份：%@";
+"The connection path failed during %@: %@" = "连接路径在 %@ 阶段失败：%@";
+"The proxy path closed before the RDP server responded. The selected proxy may block TCP port 3389 or RDP traffic." = "代理路径在 RDP 服务器响应前已关闭。所选代理可能阻止 TCP 3389 端口或 RDP 流量。";
+"The target did not return a valid RDP negotiation response." = "目标计算机未返回有效的 RDP 协商响应。";
 "Managed by your organization" = "由组织管理";

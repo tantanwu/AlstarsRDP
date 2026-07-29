@@ -30,7 +30,14 @@ public struct RouteProbeError: Error, LocalizedError, Sendable {
     public var underlyingDescription: String
 
     public var errorDescription: String? {
-        "The connection path failed during \(stage.rawValue): \(underlyingDescription)"
+        String(
+            format: NSLocalizedString(
+                "The connection path failed during %@: %@",
+                comment: "route probe failure"
+            ),
+            stage.rawValue,
+            underlyingDescription
+        )
     }
 }
 
@@ -81,7 +88,11 @@ public final class RouteProbe: @unchecked Sendable {
                 certificateName = gateway.endpoint.host
             default:
                 let connected = try await connector.connect(target: target, route: route, credential: credential)
-                connected.connection.cancel()
+                defer { connected.connection.cancel() }
+                try await RDPPathProbe.verify(
+                    connection: connected.connection,
+                    prefetchedData: connected.prefetchedTargetData
+                )
                 certificateName = target.certificateName
             }
             return RouteProbeReport(

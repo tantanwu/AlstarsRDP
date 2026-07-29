@@ -773,6 +773,7 @@ RemoteDesktop/
 | BUG-009 | P2 | 打开设置或连接时，Keychain 授权查询可能阻塞 AppKit 主线程 | 同步 `SecItemCopyMatching` 从主 actor 调用 | 通过 `Task.detached` 后台读取，主线程仅消费结果；增加线程回归测试 | 已修复；双架构 CI 与 macOS 11 后台线程测试通过 |
 | BUG-010 | P1 | 分辨率设置不直观，远程窗口不能进入全屏，“动态分辨率”不会随本地窗口变化 | 配置只在连接前设置 `DynamicResolutionUpdate` 布尔值，没有接入 Display Control 通道、发送 Monitor Layout 更新或监听窗口事件；创建窗口时错误地预置 `.fullScreen` 状态位，且没有标准全屏菜单行为 | 接入 RDPEDISP Display Control；按画布 backing pixels、DPI 和协议边界计算尺寸，拖动去抖并在屏幕/全屏变化后立即同步；改用 `.fullScreenPrimary` 和标准快捷键；显示设置增加常用分辨率与“跟随窗口”模式 | 代码、双架构 CI、Universal 2 产物和 macOS 11 启动验证已完成；真实 RDP 窗口拖动与全屏效果待用户验收 |
 | BUG-011 | P1 | macOS 11 会话窗口的断开/全屏图标不可见；全屏顶部仍被整条工具栏占用；跟随窗口看不到 Windows 分辨率变化 | 图标和刘海兼容问题已分别修复；协议侧先缺少 RDPGFX GDI 初始化，修复后真机日志进一步确认目标服务器从未建立 Display Control (`disp`) 通道，所有在线布局请求均在本地因通道未激活而拒绝 | 初始化 RDPGFX 并监听服务器尺寸；显式登记 `disp`/`rdpgfx` 动态通道并记录加载状态；支持 RDPEDISP 时在线调整，不支持时对最终画布尺寸执行带激活宽限、防抖和限频的受控重连 | 图标、刘海、RDPGFX 版本已通过 CI 和 macOS 11 部署；动态通道显式登记与旧服务器重连降级待新 CI 和真实 Windows 验收，不能提前关闭 |
+| BUG-012 | P1 | Direct 正常，但同一目标经本机 Clash SOCKS5 返回 `0x00020006` | 应用外最小探针确认 SOCKS5 握手成功后，上游在 RDP 响应前主动 EOF；Clash 调试日志确认目标命中 `Match` 并经当前新加坡代理节点转发，该节点不提供可用的 3389/RDP TCP 路径 | 路径测试从“代理握手成功”升级为验证真实 X.224/RDP 协商响应；对提前关闭给出代理节点可能阻止 3389/RDP 的明确提示；实际连接需更换支持任意 TCP 的节点、专用 SOCKS/SSH 或 RD Gateway | 应用误报修复开发中；当前 Clash 节点兼容性属于外部阻塞，切换节点后复验 |
 
 ### 14.3.4 代理与空白会话修复证据
 
@@ -870,6 +871,9 @@ RemoteDesktop/
 - 自动化状态：提交 `ba0867f` 的 GitHub Actions [30416244604](https://github.com/tantanwu/AlstarsRDP/actions/runs/30416244604) 全绿；双架构 Swift 测试、arm64/x86_64 FreeRDP、Universal 2 Release、AppKit/renderer 测试、ad-hoc 签名、依赖闭包、打包和仓库校验全部通过。
 - 构建产物：artifact ID `8710313921`，大小 `18,887,812` bytes，GitHub SHA-256 为 `7e39802e2e309f312ef7b4bcfb5a7a76f29df666cc46f1ad86d022e56e31b3d9`。
 - 当前状态：代码、自动化测试与 GitHub 构建已完成；产物下载双重校验、macOS 11 部署及真实 Windows 重连后尺寸变化待完成，BUG-011 保持未完成。
+- 代理回归取证：macOS 11 真机对 `129.226.89.229:3389` 发送同一个最小 X.224 请求，Direct 在等待 3 秒后仍返回合法 19-byte RDP 协商响应；SOCKS5 `127.0.0.1:7897` 返回成功握手后在 1 秒内 EOF，立即发送请求同样无任何 RDP 响应。该探针未经过应用代码，排除 loopback relay、FreeRDP、账号、证书、NLA 和显示通道。
+- Clash 取证：mihomo `v1.19.21`、`rule` 模式、mixed port `7897`；临时启用 debug 后记录目标命中 `Match`，出站链为“良心云/新加坡专线01”，随后立即关闭。日志级别已恢复 `warning`，未改动节点、规则或凭据。
+- 路径测试加固：SOCKS5/HTTP CONNECT/Direct 探针在 TCP 或代理握手后继续验证真实 TPKT/X.224 Connection Confirm；代理提前关闭时提示节点可能阻止 TCP 3389/RDP，避免将“隧道建立”误报为“RDP 路径可用”。新增合法响应、非 RDP 响应、截断响应和错误 PDU 类型测试；待 CI 与 macOS 11 新产物验收。
 
 ### 14.4 每周状态模板
 
@@ -1023,6 +1027,7 @@ RemoteDesktop/
 | 2026-07-29 | 0.3.2 | 修复 macOS 11 会话图标为空；全屏工具栏改为顶部中央自动收起的小刘海；显式启用 FreeRDP Display Control；增加远端帧尺寸确认、有限重试、诊断和 AppKit 回归测试 | 用户确认代理可连接后反馈全屏顶部仍占空间、图标不可见，且跟随窗口未体现 Windows 端分辨率变化；macOS 11 与 FreeRDP 3.30.0 源码取证确认兼容和可观测性缺口 | Codex |
 | 2026-07-29 | 0.3.3 | 初始化并幂等释放 FreeRDP RDPGFX GDI 图形管线；订阅 `GraphicsReset`，与经典 `DesktopResize` 统一发布服务器实际尺寸；增加 Display Control/RDPGFX 持久化诊断 | 用户复验确认窗口和全屏均不改变远端分辨率；真机 profile 排除设置问题，FreeRDP 3.30.0 源码确认已启用 RDPGFX 却未安装 GDI 回调的协议缺口 | Codex |
 | 2026-07-29 | 0.3.4 | 显式登记 `disp`/`rdpgfx` 动态通道并记录加载状态；为未建立 RDPEDISP 的服务器增加带激活宽限、防抖和限频的最新画布尺寸重连降级 | 截图确认远端 framebuffer 固定为 `1180x712`，统一日志确认所有请求因 Display Control 未激活而在本地拒绝；初始连接尺寸正确，界定为在线调整能力缺失 | Codex |
+| 2026-07-29 | 0.3.5 | 将连接路径测试从 TCP/SOCKS/CONNECT 握手升级为最小 RDP X.224 协商验证，并增加代理提前关闭的明确诊断与协议解析测试 | Direct 返回合法协商响应，而同一目标经 Clash 当前新加坡节点在 SOCKS5 成功后立即 EOF；应用外探针和 mihomo debug 日志确认是当前代理出站不支持该 RDP 路径 | Codex |
 
 ---
 
