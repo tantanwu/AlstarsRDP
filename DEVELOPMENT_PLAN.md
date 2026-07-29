@@ -854,7 +854,10 @@ RemoteDesktop/
 - 修复实现：桥接同时处理 `DISP_DVC_CHANNEL_NAME` 与 `RDPGFX_DVC_CHANNEL_NAME`；RDPGFX 连接后显式绑定 GDI 管线，断开和 `PostDisconnect` 时幂等释放；订阅 FreeRDP `GraphicsReset` PubSub 事件，并与经典 `DesktopResize` 统一去重后向 Swift 层发布服务器实际桌面尺寸。
 - 生命周期依据：FreeRDP 3.30.0 在 `PostConnect` 的 `gdi_init` 之后才执行通道 post-connect，因此 RDPGFX 连接时 GDI 已可用；`rdpgfx_recv_reset_graphics_pdu` 先调用 GDI `ResetGraphics`，随后发布 `GraphicsResetEventArgs`。自定义 `RDPAppContext` 不能直接转发官方 `freerdp_client_OnChannelConnectedEventHandler`，因为该函数会把 context 强转为更大的 `rdpClientContext`，所以本项目只显式接入所需 RDPGFX 生命周期。
 - 诊断闭环：使用 `[RDPDisplay]` 统一日志持久记录 Display Control 连接、能力激活、布局发送状态、RDPGFX 初始化结果和服务器返回尺寸。新构建真机复验时必须看到 `Display Control activated`、`layout ... send status=0`，并最终看到 `server desktop DesktopResize` 或 `server desktop GraphicsReset`；缺少任一环节均不能将请求视为生效。
-- 当前状态：代码审查与 Windows 工作区复验失败记录已完成；双架构编译、Universal 2 打包、macOS 11 启动及真实 Windows 窗口/全屏动态分辨率仍待完成。
+- 自动化状态：提交 `d14c4c6` 的 GitHub Actions [30415028733](https://github.com/tantanwu/AlstarsRDP/actions/runs/30415028733) 全绿，耗时 4 分 28 秒；两组 Swift 测试、arm64/x86_64 FreeRDP、Universal 2 应用、AppKit/桥接/渲染测试、ad-hoc 签名、依赖闭包和打包门禁全部通过。仅有 GitHub artifact action 的 Node.js 20 弃用警告，与应用代码无关。
+- 构建产物：artifact ID `8709898446`；GitHub 外层 ZIP SHA-256 为 `2a748d4e486b79f1bf27d11ebe1b6661a534e1d09449cab8c8da461c7710e302`，内层应用 ZIP SHA-256 为 `688b5986972e159b600498ae23cb1d9fc87983192ad9ed6f4be174de6eb9e221`，下载后双重校验一致。
+- macOS 11 部署：应用已部署到 `/Users/jerry/AlstarsRDP-validation/run-30415028733/unpacked/RemoteDesktop.app`，未覆盖旧目录或主动终止旧会话。macOS 11.7.10 Intel 上严格 codesign、主程序和 RDPBridge 的 `x86_64 arm64`、最低系统 11.0 均通过；新进程从该路径启动并保持运行，System Events 确认主窗口可见且标题为“远程桌面连接”，启动后三分钟内无 error 级统一日志。
+- 当前状态：代码、CI、产物校验和 macOS 11 基础启动已完成；真实 Windows 会话中窗口拖动、进入/退出全屏及 `[RDPDisplay]` 服务器尺寸确认仍待复验，BUG-011 保持未完成。
 
 ### 14.4 每周状态模板
 
