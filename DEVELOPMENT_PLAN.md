@@ -867,7 +867,9 @@ RemoteDesktop/
 - 通道加固：在通用 add-in 加载前显式把 `disp` 和 `rdpgfx` 加入 FreeRDP 动态通道集合，重复项由 FreeRDP collection 去重；新增日志记录 add-in 结果、两条通道是否排队和动态通道总数，从而区分“客户端未登记”与“服务器未建立”。
 - 兼容降级：RDPEDISP 激活时继续使用无缝 `SendMonitorLayout`；未激活时仅在已收到远端首帧、目标画布尺寸不同且窗口稳定后执行一次受控重连。策略包含 2.5 秒通道激活宽限、750 ms 最终尺寸防抖和 4 秒最小重连间隔，并复用现有内存/Keychain 凭据与代理路线，不在拖动过程中连续断线。
 - 自动化覆盖：新增激活宽限、重连限频、未知远端尺寸不重连、相同尺寸不重连和尺寸不同时启用降级的单元测试；新增诊断码 `RDP_RESIZE_RECONNECT_FALLBACK` 和中文状态提示。
-- 当前状态：代码与静态差异检查已完成；双架构 CI、Universal 2 产物、macOS 11 部署及真实 Windows 重连后尺寸变化待完成，BUG-011 保持未完成。
+- 自动化状态：提交 `ba0867f` 的 GitHub Actions [30416244604](https://github.com/tantanwu/AlstarsRDP/actions/runs/30416244604) 全绿；双架构 Swift 测试、arm64/x86_64 FreeRDP、Universal 2 Release、AppKit/renderer 测试、ad-hoc 签名、依赖闭包、打包和仓库校验全部通过。
+- 构建产物：artifact ID `8710313921`，大小 `18,887,812` bytes，GitHub SHA-256 为 `7e39802e2e309f312ef7b4bcfb5a7a76f29df666cc46f1ad86d022e56e31b3d9`。
+- 当前状态：代码、自动化测试与 GitHub 构建已完成；产物下载双重校验、macOS 11 部署及真实 Windows 重连后尺寸变化待完成，BUG-011 保持未完成。
 
 ### 14.4 每周状态模板
 
