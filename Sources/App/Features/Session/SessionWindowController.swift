@@ -1070,7 +1070,7 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
               reconnectAttempt < profile.reconnect.maximumAttempts else {
             clearEphemeralCredentials()
             let summary = NSLocalizedString(
-                RDPFailureClassifier.summary(for: errorCode),
+                RDPFailureClassifier.summary(for: errorCode, route: profile.route),
                 comment: "RDP failure summary"
             )
             showStatus(

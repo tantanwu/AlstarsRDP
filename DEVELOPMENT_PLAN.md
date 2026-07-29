@@ -773,7 +773,7 @@ RemoteDesktop/
 | BUG-009 | P2 | 打开设置或连接时，Keychain 授权查询可能阻塞 AppKit 主线程 | 同步 `SecItemCopyMatching` 从主 actor 调用 | 通过 `Task.detached` 后台读取，主线程仅消费结果；增加线程回归测试 | 已修复；双架构 CI 与 macOS 11 后台线程测试通过 |
 | BUG-010 | P1 | 分辨率设置不直观，远程窗口不能进入全屏，“动态分辨率”不会随本地窗口变化 | 配置只在连接前设置 `DynamicResolutionUpdate` 布尔值，没有接入 Display Control 通道、发送 Monitor Layout 更新或监听窗口事件；创建窗口时错误地预置 `.fullScreen` 状态位，且没有标准全屏菜单行为 | 接入 RDPEDISP Display Control；按画布 backing pixels、DPI 和协议边界计算尺寸，拖动去抖并在屏幕/全屏变化后立即同步；改用 `.fullScreenPrimary` 和标准快捷键；显示设置增加常用分辨率与“跟随窗口”模式 | 代码、双架构 CI、Universal 2 产物和 macOS 11 启动验证已完成；真实 RDP 窗口拖动与全屏效果待用户验收 |
 | BUG-011 | P1 | macOS 11 会话窗口的断开/全屏图标不可见；全屏顶部仍被整条工具栏占用；跟随窗口看不到 Windows 分辨率变化 | 图标和刘海兼容问题已分别修复；协议侧先缺少 RDPGFX GDI 初始化，修复后真机日志进一步确认目标服务器从未建立 Display Control (`disp`) 通道，所有在线布局请求均在本地因通道未激活而拒绝 | 初始化 RDPGFX 并监听服务器尺寸；显式登记 `disp`/`rdpgfx` 动态通道并记录加载状态；支持 RDPEDISP 时在线调整，不支持时对最终画布尺寸执行带激活宽限、防抖和限频的受控重连 | 图标、刘海、RDPGFX 版本已通过 CI 和 macOS 11 部署；动态通道显式登记与旧服务器重连降级待新 CI 和真实 Windows 验收，不能提前关闭 |
-| BUG-012 | P1 | Direct 正常，但同一目标经本机 Clash SOCKS5 返回 `0x00020006` | 应用外最小探针确认 SOCKS5 握手成功后，上游在 RDP 响应前主动 EOF；Clash 调试日志确认目标命中 `Match` 并经当前新加坡代理节点转发，该节点不提供可用的 3389/RDP TCP 路径 | 路径测试从“代理握手成功”升级为验证真实 X.224/RDP 协商响应；对提前关闭给出代理节点可能阻止 3389/RDP 的明确提示；实际连接需更换支持任意 TCP 的节点、专用 SOCKS/SSH 或 RD Gateway | 应用误报修复开发中；当前 Clash 节点兼容性属于外部阻塞，切换节点后复验 |
+| BUG-012 | P1 | Direct 正常，但同一目标经本机 Clash SOCKS5 返回 `0x00020006` | 应用外最小探针确认 SOCKS5 握手成功后，上游在 RDP 响应前主动 EOF；Clash 调试日志确认目标命中 `Match` 并经当前新加坡代理节点转发，该节点不提供可用的 3389/RDP TCP 路径 | 路径测试从“代理握手成功”升级为验证真实 X.224/RDP 协商响应；路径测试和正式会话都对代理早期网络失败给出节点可能阻止 3389/RDP 的明确提示；实际连接需更换支持任意 TCP 的节点、专用 SOCKS/SSH 或 RD Gateway | 应用误报修复开发中；当前 Clash 节点兼容性属于外部阻塞，切换节点后复验 |
 
 ### 14.3.4 代理与空白会话修复证据
 

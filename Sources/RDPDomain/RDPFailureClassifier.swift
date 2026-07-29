@@ -54,6 +54,18 @@ public enum RDPFailureClassifier {
             return "The RDP connection failed."
         }
     }
+
+    public static func summary(for errorCode: UInt32, route: RouteConfiguration) -> String {
+        guard errorCode == 0x0002_0006 || errorCode == 0x0002_0007 || errorCode == 0x0002_000D else {
+            return summary(for: errorCode)
+        }
+        switch route {
+        case .socks5, .httpConnect:
+            return "The selected proxy could not carry the RDP connection. It may block TCP port 3389 or RDP traffic."
+        default:
+            return summary(for: errorCode)
+        }
+    }
 }
 
 public enum ReconnectBackoff {

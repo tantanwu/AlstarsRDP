@@ -100,6 +100,7 @@
 "The RDP client session could not be initialized." = "RDP 客户端会话初始化失败。";
 "The target computer name could not be resolved." = "无法解析目标计算机名称。";
 "The target computer could not be reached." = "无法连接到目标计算机。";
+"The selected proxy could not carry the RDP connection. It may block TCP port 3389 or RDP traffic." = "所选代理无法承载 RDP 连接，可能阻止 TCP 3389 端口或 RDP 流量。";
 "TLS or RDP security negotiation failed." = "TLS 或 RDP 安全协商失败。";
 "Windows authentication failed or the account cannot sign in remotely." = "Windows 身份认证失败，或该账户无权远程登录。";
 "The connection was cancelled." = "连接已取消。";

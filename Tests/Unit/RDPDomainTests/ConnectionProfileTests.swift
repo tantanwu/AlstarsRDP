@@ -254,6 +254,26 @@ final class ConnectionProfileTests: XCTestCase {
         XCTAssertEqual(RDPFailureClassifier.summary(for: 0xDEAD_BEEF), "The RDP connection failed.")
     }
 
+    func testProxyRouteAddsActionableSummaryForEarlyNetworkFailures() {
+        let proxy = ProxyConfiguration(endpoint: Endpoint(host: "proxy.example", port: 1080))
+        let proxySummary = RDPFailureClassifier.summary(
+            for: 0x0002_0006,
+            route: .socks5(proxy)
+        )
+        XCTAssertEqual(
+            proxySummary,
+            "The selected proxy could not carry the RDP connection. It may block TCP port 3389 or RDP traffic."
+        )
+        XCTAssertEqual(
+            RDPFailureClassifier.summary(for: 0x0002_0006, route: .direct),
+            "The target computer could not be reached."
+        )
+        XCTAssertEqual(
+            RDPFailureClassifier.summary(for: 0x0002_0009, route: .socks5(proxy)),
+            "Windows authentication failed or the account cannot sign in remotely."
+        )
+    }
+
     func testReconnectBackoffIsBounded() {
         let policy = ReconnectPolicy(maximumAttempts: 8, initialDelayMilliseconds: 1_000, maximumDelayMilliseconds: 5_000)
         XCTAssertEqual(ReconnectBackoff.delayMilliseconds(forAttempt: 1, policy: policy), 1_000)
