@@ -142,6 +142,7 @@ typedef struct {
 - (void)clearConfigurationSecrets;
 - (RDPCertificateDecision)certificateDecision:(RDPCertificateInfo *)certificate;
 - (void)publishFrameFromContext:(RDPAppContext *)context;
+- (void)publishDesktopResizeWithWidth:(uint32_t)width height:(uint32_t)height;
 - (void)deliverPendingFrame;
 - (void)clearPendingFrame;
 - (void)displayControlConnected:(DispClientContext *)displayControl
@@ -272,9 +273,13 @@ static BOOL RDPEndPaint(rdpContext *context) {
 
 static BOOL RDPDesktopResize(rdpContext *context) {
     if (!context || !context->gdi || !context->settings) return FALSE;
-    return gdi_resize(context->gdi,
-                      freerdp_settings_get_uint32(context->settings, FreeRDP_DesktopWidth),
-                      freerdp_settings_get_uint32(context->settings, FreeRDP_DesktopHeight));
+    const UINT32 width = freerdp_settings_get_uint32(context->settings, FreeRDP_DesktopWidth);
+    const UINT32 height = freerdp_settings_get_uint32(context->settings, FreeRDP_DesktopHeight);
+    if (!gdi_resize(context->gdi, width, height)) return FALSE;
+    RDPAppContext *appContext = reinterpret_cast<RDPAppContext *>(context);
+    RDPSession *owner = appContext->owner;
+    if (owner) [owner publishDesktopResizeWithWidth:width height:height];
+    return TRUE;
 }
 
 static std::once_flag RDPAddinProviderRegistration;
@@ -684,16 +689,7 @@ static bool RDPStateCanTransition(RDPNativeSessionState from, RDPNativeSessionSt
     const UINT status = context->displayControl->SendMonitorLayout(
         context->displayControl, 1, &layout
     );
-    if (status != CHANNEL_RC_OK) return NO;
-
-    rdpSettings *settings = _instance && _instance->context ? _instance->context->settings : nullptr;
-    if (settings) {
-        (void)freerdp_settings_set_uint32(settings, FreeRDP_DesktopWidth, width);
-        (void)freerdp_settings_set_uint32(settings, FreeRDP_DesktopHeight, height);
-        (void)freerdp_settings_set_uint32(settings, FreeRDP_DesktopScaleFactor, desktopScaleFactor);
-        (void)freerdp_settings_set_uint32(settings, FreeRDP_DeviceScaleFactor, deviceScaleFactor);
-    }
-    return YES;
+    return status == CHANNEL_RC_OK;
 }
 
 - (void)publishState:(RDPNativeSessionState)state errorCode:(uint32_t)errorCode {
@@ -754,6 +750,16 @@ static bool RDPStateCanTransition(RDPNativeSessionState from, RDPNativeSessionSt
     __block RDPCertificateDecision decision = RDPCertificateDecisionReject;
     dispatch_sync(dispatch_get_main_queue(), ^{ decision = [delegate session:self decideCertificate:certificate]; });
     return decision;
+}
+
+- (void)publishDesktopResizeWithWidth:(uint32_t)width height:(uint32_t)height {
+    id<RDPSessionDelegate> delegate = self.delegate;
+    if (!delegate || width == 0 || height == 0) return;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (self.delegate == delegate) {
+            [delegate session:self didResizeDesktopToWidth:width height:height];
+        }
+    });
 }
 
 - (void)publishFrameFromContext:(RDPAppContext *)context {

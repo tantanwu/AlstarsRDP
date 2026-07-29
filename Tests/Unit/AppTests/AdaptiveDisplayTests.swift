@@ -112,7 +112,38 @@ final class AdaptiveDisplayTests: XCTestCase {
             toolbarContainer?.onHoverChanged?(true)
             window.contentView?.layoutSubtreeIfNeeded()
             XCTAssertEqual(toolbarContainer?.frame.height, 42)
-            XCTAssertEqual(toolbarContainer?.frame.width, 336)
+            XCTAssertEqual(toolbarContainer?.frame.width, 388)
+
+            let expectedTooltips = [
+                NSLocalizedString("Disconnect", comment: "disconnect"),
+                NSLocalizedString("Reconnect", comment: "reconnect"),
+                NSLocalizedString("Toggle Full Screen", comment: "full screen"),
+                NSLocalizedString("Send Control-Alt-Delete", comment: "cad")
+            ]
+            let toolbarButtons = buttons.filter { button in
+                guard let tooltip = button.toolTip else { return false }
+                return expectedTooltips.contains(tooltip)
+            }
+            XCTAssertEqual(toolbarButtons.count, expectedTooltips.count)
+            guard let toolbarContainer else { return }
+            for button in toolbarButtons {
+                XCTAssertFalse(button.isHidden)
+                let frame = button.convert(button.bounds, to: toolbarContainer)
+                XCTAssertTrue(toolbarContainer.bounds.contains(frame), "\(button.toolTip ?? "button") was clipped")
+            }
+
+            let sizeLabel = window.contentView?.allDescendants(ofType: NSTextField.self).first {
+                $0.toolTip == NSLocalizedString("Remote frame size", comment: "remote frame size")
+            }
+            sizeLabel?.stringValue = "7680x4320 > 8192x4608"
+            sizeLabel?.isHidden = false
+            window.contentView?.layoutSubtreeIfNeeded()
+            let labelFrame = sizeLabel.map { $0.convert($0.bounds, to: toolbarContainer) } ?? .zero
+            XCTAssertTrue(toolbarContainer.bounds.contains(labelFrame))
+            for button in toolbarButtons {
+                let frame = button.convert(button.bounds, to: toolbarContainer)
+                XCTAssertFalse(frame.intersects(labelFrame), "\(button.toolTip ?? "button") overlapped the remote size")
+            }
         }
     }
 }

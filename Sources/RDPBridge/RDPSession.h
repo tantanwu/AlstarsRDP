@@ -71,6 +71,8 @@ NS_SWIFT_UI_ACTOR @protocol RDPSessionDelegate <NSObject>
     NS_SWIFT_NAME(session(_:didReceiveFrame:width:height:stride:));
 - (void)sessionDidActivateDisplayControl:(RDPSession *)session
     NS_SWIFT_NAME(sessionDidActivateDisplayControl(_:));
+- (void)session:(RDPSession *)session didResizeDesktopToWidth:(uint32_t)width height:(uint32_t)height
+    NS_SWIFT_NAME(session(_:didResizeDesktopToWidth:height:));
 - (RDPCertificateDecision)session:(RDPSession *)session decideCertificate:(RDPCertificateInfo *)certificate
     NS_SWIFT_NAME(session(_:decideCertificate:));
 @end

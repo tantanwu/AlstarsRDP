@@ -836,6 +836,15 @@ RemoteDesktop/
 - 真机部署：新产物部署到 `/Users/jerry/AlstarsRDP-validation/run-30406492290/unpacked/RemoteDesktop.app`，未覆盖旧版；macOS 11.7.10 Intel 上应用保持运行，System Events 确认主窗口可见、标题为“远程桌面连接”、尺寸 `900x608`，统一日志未发现应用 error。
 - 当前状态：构建和基础启动已完成；断开/全屏图标、全屏小刘海悬停收起以及真实 Windows framebuffer 尺寸变化仍需连接会话后人工验收，BUG-011 不能提前标记完成。
 
+### 14.3.10 刘海操作区与服务器桌面尺寸确认修复
+
+- 用户复验：运行 `30406492290` 产物时，全屏刘海展开后仍只显示分辨率，四个操作按钮不可见；“跟随窗口”仅能从远程浏览器的响应式重排观察到变化，无法证明 Windows 已实际接受目标桌面尺寸。因此 BUG-011 继续保持未完成。
+- 刘海根因与修复：旧布局把四个按钮、可伸缩空白和具有 required hugging 的尺寸标签放在同一个 `NSStackView`，macOS 11 下按钮可能被压缩并被容器裁剪。操作按钮现使用独立固定宽度 stack，尺寸标签独立靠右约束；按钮固定 `28x28`、required 抗压缩、白色模板 tint 和可见背景；全屏展开尺寸调整为 `388x42`，收起仍为顶部中央 `72x8`。
+- 协议确认根因与修复：旧桥接在 `SendMonitorLayout` 返回成功后立即覆盖 `FreeRDP_DesktopWidth/Height` 和缩放设置，这不代表服务器已接受布局，并可能制造假确认。现已删除本地覆盖；仅在服务器触发 FreeRDP `DesktopResize`、且 `gdi_resize` 成功后回调 Swift 层，将服务器报告尺寸作为唯一协议确认。渲染帧尺寸继续用于画面检查，但不再确认动态分辨率请求。
+- 节流与诊断：所有 Monitor Layout 请求额外保证至少间隔 500 ms；服务器精确应用、返回不同尺寸或多次未确认分别记录 `RDP_RESIZE_CONFIRMED`、`RDP_RESIZE_SERVER_ADJUSTED` 和 `RDP_RESIZE_NOT_CONFIRMED`。刘海尺寸标签优先显示服务器确认尺寸，并在请求待确认时显示“当前尺寸 > 请求尺寸”。
+- 自动化状态：已补充四个按钮在展开刘海内可见、未裁剪、与最大长度尺寸标签不重叠的 AppKit 回归断言；Windows 工作区动态调整仍需 GitHub 双架构构建及 macOS 11 + 真实 Windows 复验后才能关闭 BUG-011。
+- 行为边界：RDP Display Control 调整的是 Windows 远程桌面/工作区尺寸。最大化窗口和响应式应用会随工作区变化；普通浮动窗口按 Windows 既有行为保持自身窗口大小，客户端不能强制所有远程应用自动放大或重新布局。
+
 ### 14.4 每周状态模板
 
 ```markdown

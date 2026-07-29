@@ -19,7 +19,8 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
     private let enterprisePolicy: EnterprisePolicy
     private let canvas: RemoteFrameView
     private let toolbarContainer = SessionToolbarContainer()
-    private let toolbar = NSStackView()
+    private let toolbarContentView = NSView()
+    private let toolbarActions = NSStackView()
     private let toolbarNotch = NSView()
     private let remoteSizeLabel = NSTextField(labelWithString: "")
     private let statusLabel = NSTextField(labelWithString: "")
@@ -55,9 +56,12 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
     private var requestedAdaptiveMetrics: AdaptiveDesktopMetrics?
     private var adaptiveConfirmationTask: Task<Void, Never>?
     private var adaptiveRetryCount = 0
+    private var lastAdaptiveRequestTime: TimeInterval = 0
     private var displayControlActivated = false
     private var lastRemoteFrameWidth: UInt32 = 0
     private var lastRemoteFrameHeight: UInt32 = 0
+    private var lastServerDesktopWidth: UInt32 = 0
+    private var lastServerDesktopHeight: UInt32 = 0
     private var lastResizeRejectionMetrics: AdaptiveDesktopMetrics?
     private var fullscreenToolbarCollapseTask: Task<Void, Never>?
     private var isSessionFullScreen = false
@@ -258,43 +262,48 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
 
     private func buildInterface() {
         guard let content = window?.contentView else { return }
-        toolbar.orientation = .horizontal; toolbar.alignment = .centerY; toolbar.spacing = 8
-        toolbar.translatesAutoresizingMaskIntoConstraints = false
-        toolbar.addArrangedSubview(button(
+        toolbarActions.orientation = .horizontal
+        toolbarActions.alignment = .centerY
+        toolbarActions.spacing = 8
+        toolbarActions.translatesAutoresizingMaskIntoConstraints = false
+        toolbarActions.addArrangedSubview(button(
             symbols: ["xmark.circle", "stop.circle"],
             fallbackName: NSImage.stopProgressTemplateName,
             tooltip: NSLocalizedString("Disconnect", comment: "disconnect"),
             action: #selector(disconnect)
         ))
-        toolbar.addArrangedSubview(button(
+        toolbarActions.addArrangedSubview(button(
             symbols: ["arrow.clockwise"],
             fallbackName: NSImage.refreshTemplateName,
             tooltip: NSLocalizedString("Reconnect", comment: "reconnect"),
             action: #selector(reconnect)
         ))
-        toolbar.addArrangedSubview(button(
+        toolbarActions.addArrangedSubview(button(
             symbols: ["arrow.up.left.and.arrow.down.right"],
             fallbackName: NSImage.enterFullScreenTemplateName,
             tooltip: NSLocalizedString("Toggle Full Screen", comment: "full screen"),
             action: #selector(toggleFullScreen)
         ))
-        toolbar.addArrangedSubview(button(
+        toolbarActions.addArrangedSubview(button(
             symbols: ["keyboard"],
             fallbackName: NSImage.actionTemplateName,
             tooltip: NSLocalizedString("Send Control-Alt-Delete", comment: "cad"),
             action: #selector(sendControlAltDelete)
         ))
-        let spacer = NSView()
-        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        toolbar.addArrangedSubview(spacer)
         remoteSizeLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .medium)
+        remoteSizeLabel.translatesAutoresizingMaskIntoConstraints = false
         remoteSizeLabel.textColor = .secondaryLabelColor
         remoteSizeLabel.alignment = .right
         remoteSizeLabel.lineBreakMode = .byClipping
         remoteSizeLabel.toolTip = NSLocalizedString("Remote frame size", comment: "remote frame size")
         remoteSizeLabel.setContentHuggingPriority(.required, for: .horizontal)
+        remoteSizeLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
         remoteSizeLabel.isHidden = true
-        toolbar.addArrangedSubview(remoteSizeLabel)
+
+        toolbarContentView.identifier = NSUserInterfaceItemIdentifier("SessionToolbarContent")
+        toolbarContentView.translatesAutoresizingMaskIntoConstraints = false
+        toolbarContentView.addSubview(toolbarActions)
+        toolbarContentView.addSubview(remoteSizeLabel)
 
         toolbarContainer.identifier = NSUserInterfaceItemIdentifier("SessionToolbarContainer")
         toolbarContainer.translatesAutoresizingMaskIntoConstraints = false
@@ -313,7 +322,7 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
         toolbarNotch.layer?.backgroundColor = NSColor(calibratedWhite: 0.72, alpha: 0.9).cgColor
         toolbarNotch.layer?.cornerRadius = 2
         toolbarNotch.isHidden = true
-        toolbarContainer.addSubview(toolbar)
+        toolbarContainer.addSubview(toolbarContentView)
         toolbarContainer.addSubview(toolbarNotch)
 
         progress.style = .spinning
@@ -345,9 +354,15 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
         toolbarWidthConstraint = toolbarContainer.widthAnchor.constraint(equalToConstant: 72)
         toolbarHeightConstraint = toolbarContainer.heightAnchor.constraint(equalToConstant: 32)
         toolbarContentConstraints = [
-            toolbar.leadingAnchor.constraint(equalTo: toolbarContainer.leadingAnchor, constant: 8),
-            toolbar.trailingAnchor.constraint(equalTo: toolbarContainer.trailingAnchor, constant: -8),
-            toolbar.centerYAnchor.constraint(equalTo: toolbarContainer.centerYAnchor)
+            toolbarContentView.leadingAnchor.constraint(equalTo: toolbarContainer.leadingAnchor, constant: 8),
+            toolbarContentView.trailingAnchor.constraint(equalTo: toolbarContainer.trailingAnchor, constant: -8),
+            toolbarContentView.centerYAnchor.constraint(equalTo: toolbarContainer.centerYAnchor),
+            toolbarContentView.heightAnchor.constraint(equalToConstant: 28),
+            toolbarActions.leadingAnchor.constraint(equalTo: toolbarContentView.leadingAnchor),
+            toolbarActions.centerYAnchor.constraint(equalTo: toolbarContentView.centerYAnchor),
+            remoteSizeLabel.trailingAnchor.constraint(equalTo: toolbarContentView.trailingAnchor),
+            remoteSizeLabel.centerYAnchor.constraint(equalTo: toolbarContentView.centerYAnchor),
+            toolbarActions.trailingAnchor.constraint(lessThanOrEqualTo: remoteSizeLabel.leadingAnchor, constant: -12)
         ]
         canvasTopToToolbarConstraint = canvas.topAnchor.constraint(equalTo: toolbarContainer.bottomAnchor, constant: 8)
         canvasTopToContentConstraint = canvas.topAnchor.constraint(equalTo: content.topAnchor)
@@ -386,8 +401,16 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
         }.first ?? NSImage(named: fallbackName) ?? NSImage(named: NSImage.cautionName)!
         image.isTemplate = true
         let button = NSButton(image: image, target: self, action: action)
-        button.bezelStyle = .texturedRounded; button.toolTip = tooltip; button.setAccessibilityLabel(tooltip)
+        button.bezelStyle = .regularSquare
+        button.isBordered = false
+        button.imagePosition = .imageOnly
+        button.toolTip = tooltip
+        button.setAccessibilityLabel(tooltip)
         button.translatesAutoresizingMaskIntoConstraints = false
+        button.wantsLayer = true
+        button.layer?.cornerRadius = 4
+        button.setContentHuggingPriority(.required, for: .horizontal)
+        button.setContentCompressionResistancePriority(.required, for: .horizontal)
         NSLayoutConstraint.activate([
             button.widthAnchor.constraint(equalToConstant: 28),
             button.heightAnchor.constraint(equalToConstant: 28)
@@ -543,6 +566,19 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
         lastRemoteFrameWidth = width
         lastRemoteFrameHeight = height
         if sizeChanged { updateRemoteSizeLabel() }
+        progress.stopAnimation(nil)
+        retryButton.isHidden = true
+        statusOverlay.isHidden = true
+    }
+
+    func session(_ session: RDPSession, didResizeDesktopToWidth width: UInt32, height: UInt32) {
+        guard self.session === session else { return }
+        let previousWidth = lastServerDesktopWidth
+        let previousHeight = lastServerDesktopHeight
+        lastServerDesktopWidth = width
+        lastServerDesktopHeight = height
+        updateRemoteSizeLabel()
+
         if let requested = requestedAdaptiveMetrics,
            requested.width == width,
            requested.height == height {
@@ -554,13 +590,31 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
             recordAdaptiveDisplayEvent(
                 level: .info,
                 code: "RDP_RESIZE_CONFIRMED",
-                message: "The remote frame confirmed the requested desktop size.",
+                message: "The server applied the requested desktop size.",
                 metrics: requested
             )
+        } else if let requested = requestedAdaptiveMetrics {
+            recordAdaptiveDisplayEvent(
+                level: .warning,
+                code: "RDP_RESIZE_SERVER_ADJUSTED",
+                message: "The server reported a desktop size different from the requested layout.",
+                metrics: requested,
+                fields: [
+                    "serverWidth": .number(Double(width)),
+                    "serverHeight": .number(Double(height))
+                ]
+            )
+        } else if previousWidth != width || previousHeight != height {
+            recordAdaptiveDisplayEvent(
+                level: .info,
+                code: "RDP_DESKTOP_RESIZED",
+                message: "The server reported a desktop resize.",
+                fields: [
+                    "serverWidth": .number(Double(width)),
+                    "serverHeight": .number(Double(height))
+                ]
+            )
         }
-        progress.stopAnimation(nil)
-        retryButton.isHidden = true
-        statusOverlay.isHidden = true
     }
 
     func sessionDidActivateDisplayControl(_ session: RDPSession) {
@@ -656,10 +710,13 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
         lastAdaptiveMetrics = nil
         requestedAdaptiveMetrics = nil
         adaptiveRetryCount = 0
+        lastAdaptiveRequestTime = 0
         displayControlActivated = false
         lastResizeRejectionMetrics = nil
         lastRemoteFrameWidth = 0
         lastRemoteFrameHeight = 0
+        lastServerDesktopWidth = 0
+        lastServerDesktopHeight = 0
         updateRemoteSizeLabel()
         releaseConnectionResources()
     }
@@ -698,16 +755,19 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
         if showContent {
             NSLayoutConstraint.activate(toolbarContentConstraints)
         }
-        toolbar.isHidden = !showContent
+        toolbarContentView.isHidden = !showContent
         toolbarNotch.isHidden = showContent
-        toolbarWidthConstraint?.constant = expanded ? 336 : 72
+        toolbarWidthConstraint?.constant = expanded ? 388 : 72
         toolbarHeightConstraint?.constant = enabled ? (expanded ? 42 : 8) : 32
         toolbarContainer.layer?.cornerRadius = enabled ? 6 : 0
         toolbarContainer.layer?.backgroundColor = enabled
             ? NSColor(calibratedWhite: 0.04, alpha: 0.9).cgColor
             : NSColor.clear.cgColor
-        toolbar.arrangedSubviews.compactMap { $0 as? NSButton }.forEach {
+        toolbarActions.arrangedSubviews.compactMap { $0 as? NSButton }.forEach {
             $0.contentTintColor = enabled ? .white : .labelColor
+            $0.layer?.backgroundColor = enabled
+                ? NSColor.white.withAlphaComponent(0.14).cgColor
+                : NSColor.clear.cgColor
         }
         remoteSizeLabel.textColor = enabled ? .white : .secondaryLabelColor
         content.layoutSubtreeIfNeeded()
@@ -749,18 +809,25 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
                 do { try await Task.sleep(nanoseconds: 500_000_000) }
                 catch { return }
             }
-            guard let self,
-                  !Task.isCancelled,
+            guard let self else { return }
+            let elapsed = Date.timeIntervalSinceReferenceDate - self.lastAdaptiveRequestTime
+            if elapsed < 0.5 {
+                do {
+                    try await Task.sleep(nanoseconds: UInt64((0.5 - elapsed) * 1_000_000_000))
+                } catch { return }
+            }
+            guard !Task.isCancelled,
                   self.adaptiveResizeGeneration == generation,
                   let session = self.session,
                   session.state == .connected,
                   let metrics = self.currentAdaptiveMetrics(),
                   metrics != self.lastAdaptiveMetrics else {
-                if self?.adaptiveResizeGeneration == generation {
-                    self?.adaptiveResizeTask = nil
+                if self.adaptiveResizeGeneration == generation {
+                    self.adaptiveResizeTask = nil
                 }
                 return
             }
+            self.lastAdaptiveRequestTime = Date.timeIntervalSinceReferenceDate
             let sent = session.requestDesktopResize(
                 width: metrics.width,
                 height: metrics.height,
@@ -808,14 +875,6 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
             guard let self,
                   self.requestedAdaptiveMetrics == metrics,
                   !self.isClosing else { return }
-            if self.lastRemoteFrameWidth == metrics.width,
-               self.lastRemoteFrameHeight == metrics.height {
-                self.requestedAdaptiveMetrics = nil
-                self.adaptiveRetryCount = 0
-                self.adaptiveConfirmationTask = nil
-                self.updateRemoteSizeLabel()
-                return
-            }
             guard self.window?.inLiveResize != true,
                   self.currentAdaptiveMetrics() == metrics else {
                 self.adaptiveConfirmationTask = nil
@@ -828,11 +887,11 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
                 self.recordAdaptiveDisplayEvent(
                     level: .warning,
                     code: "RDP_RESIZE_NOT_CONFIRMED",
-                    message: "The remote frame did not confirm the requested desktop size after retries.",
+                    message: "The server did not confirm the requested desktop size after retries.",
                     metrics: metrics,
                     fields: [
-                        "remoteWidth": .number(Double(self.lastRemoteFrameWidth)),
-                        "remoteHeight": .number(Double(self.lastRemoteFrameHeight))
+                        "serverWidth": .number(Double(self.lastServerDesktopWidth)),
+                        "serverHeight": .number(Double(self.lastServerDesktopHeight))
                     ]
                 )
                 return
@@ -852,16 +911,18 @@ final class SessionWindowController: NSWindowController, NSWindowDelegate, RDPSe
     }
 
     private func updateRemoteSizeLabel() {
-        guard lastRemoteFrameWidth > 0, lastRemoteFrameHeight > 0 else {
+        let actualWidth = lastServerDesktopWidth > 0 ? lastServerDesktopWidth : lastRemoteFrameWidth
+        let actualHeight = lastServerDesktopHeight > 0 ? lastServerDesktopHeight : lastRemoteFrameHeight
+        guard actualWidth > 0, actualHeight > 0 else {
             remoteSizeLabel.stringValue = ""
             remoteSizeLabel.isHidden = true
             return
         }
         if let requested = requestedAdaptiveMetrics,
-           (requested.width != lastRemoteFrameWidth || requested.height != lastRemoteFrameHeight) {
-            remoteSizeLabel.stringValue = "\(lastRemoteFrameWidth)x\(lastRemoteFrameHeight) > \(requested.width)x\(requested.height)"
+           (requested.width != actualWidth || requested.height != actualHeight) {
+            remoteSizeLabel.stringValue = "\(actualWidth)x\(actualHeight) > \(requested.width)x\(requested.height)"
         } else {
-            remoteSizeLabel.stringValue = "\(lastRemoteFrameWidth)x\(lastRemoteFrameHeight)"
+            remoteSizeLabel.stringValue = "\(actualWidth)x\(actualHeight)"
         }
         remoteSizeLabel.isHidden = false
     }
